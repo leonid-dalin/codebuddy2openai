@@ -685,20 +685,12 @@ async def _stream_upstream(url: str, headers: dict, body: dict,
     _log(f"{prefix}── RESPONSE RAW SSE ──\n{b''.join(raw_parts).decode('utf-8','replace')}")
 
 
-def _safe_err(r: httpx.Response) -> dict:
-    try:
-        return {"error": r.json()}
-    except Exception:
-        return {"error": {"message": r.text[:500], "type": "upstream_error", "code": r.status_code}}
-
-
 def _err_event(msg: bytes, status: int) -> bytes:
     # 以 OpenAI SSE 错误 chunk 形式返回
-    import json as _json, time as _time
     chunk = {
         "error": {"message": msg.decode("utf-8", "replace")[:500], "type": "upstream_error", "code": status},
     }
-    return f"data: {_json.dumps(chunk, ensure_ascii=False)}\n\n".encode("utf-8")
+    return f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode("utf-8")
 
 
 # ---------------------------------------------------------------------------
