@@ -104,8 +104,6 @@ python3 converter.py --direct-key ck_你的密钥
 
 ### 🔌 接入客户端
 
-⚠️ **关于 Codex CLI（重要）**：新版本 Codex CLI 已**移除** `wire_api = "chat"` 的支持，目前只认 `completions` 格式，因此**本转换器无法直接接入 Codex CLI**。仓库里的 `codex-codebuddy.example.toml` 仅作历史/参考保留，实测在当前 Codex 上跑不通，请不要照抄。
-
 ✅ **可用方式 —— 任何标准 OpenAI 兼容客户端**（走 `/v1/chat/completions`）。常见选择：
 
 - **ZCode**（OpenAI 兼容 Agent）
@@ -167,7 +165,6 @@ curl -N http://127.0.0.1:8787/v1/chat/completions \
 codebuddy2openai/
 ├── converter.py                     # 转换器主程序（单文件）
 ├── desensitize.py                   # 脱敏模块（可选，--desensitize 启用）
-├── codex-codebuddy.example.toml     # provider 配置示例片段（仅供参考；Codex CLI 已不支持，见上方说明）
 ├── README.md
 └── LICENSE
 ```

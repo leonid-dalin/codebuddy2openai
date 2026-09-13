@@ -1,7 +1,9 @@
 ---
 name: Bug report
 about: Something does not work
+title: ''
 labels: bug
+assignees: ''
 ---
 
 ## What happens
@@ -24,6 +26,7 @@ labels: bug
 - Python version (`python --version`):
 - Install method (git clone, pipx, other):
 - Commit or version:
+- Mode (desktop session, or `--direct-key`):
 
 ## Proxy output
 
@@ -44,3 +47,5 @@ labels: bug
 ## Anything else
 
 <!-- Model in use, client you are connecting from, relevant log lines. Redact tokens. -->
+
+<!-- Do not report credential leaks or vulnerabilities here. See SECURITY.md. -->

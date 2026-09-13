@@ -1,7 +1,9 @@
 ---
 name: Feature request
 about: Suggest a change
+title: ''
 labels: enhancement
+assignees: ''
 ---
 
 ## The problem
