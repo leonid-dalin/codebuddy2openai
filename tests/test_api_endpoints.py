@@ -590,6 +590,126 @@ class TestChatCompletionsErrors:
         assert response.status_code == 502
 
 
+class TestGateFallback:
+    @staticmethod
+    def _gated_ctx(gate_body):
+        class GatedCtx:
+            async def __aenter__(self):
+                class R:
+                    status_code = 403
+
+                    async def aread(self):
+                        return json.dumps(gate_body).encode()
+
+                return R()
+
+            async def __aexit__(self, *a):
+                return False
+
+        return GatedCtx()
+
+    @staticmethod
+    def _ok_ctx():
+        class OkCtx:
+            async def __aenter__(self):
+                class R:
+                    status_code = 200
+
+                    async def aiter_lines(self):
+                        yield "data: " + json.dumps({
+                            "id": "x", "model": "m",
+                            "object": "chat.completion.chunk", "created": 0,
+                            "choices": [{"index": 0,
+                                         "delta": {"content": "OK"},
+                                         "finish_reason": ""}],
+                            "usage": None})
+                        yield "data: [DONE]"
+
+                    async def aiter_bytes(self):
+                        yield b""
+
+                return R()
+
+            async def __aexit__(self, *a):
+                return False
+
+        return OkCtx()
+
+    @pytest.mark.parametrize("gate_code", [6004, 11128])
+    def test_gated_direct_key_retries_over_token_path(
+        self, direct_key_client, converter_module, monkeypatch, fake_auth_file,
+        tmp_path, gate_code
+    ):
+        gate_body = {"error": {"code": gate_code, "message": f"code {gate_code} quota"}}
+        calls = []
+        log_file = tmp_path / "conv.log"
+        converter_module.CONFIG["log_path"] = str(log_file)
+
+        class RoutedClient:
+            def __init__(self, *a, **k):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            def stream(self, method, url, headers=None, json=None, **kw):
+                calls.append(url)
+                if "codebuddy.ai" in url and len(calls) == 1:
+                    return self._gated_ctx(gate_body)
+                return self._ok_ctx()
+
+        RoutedClient._gated_ctx = staticmethod(TestGateFallback._gated_ctx)
+        RoutedClient._ok_ctx = staticmethod(TestGateFallback._ok_ctx)
+
+        path, payload = fake_auth_file
+        converter_module.CONFIG["cred"] = converter_module.CredentialManager(path)
+        monkeypatch.setattr(converter_module.httpx, "AsyncClient", RoutedClient)
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        text = log_file.read_text(encoding="utf-8")
+        converter_module.CONFIG["log_path"] = None
+        assert response.status_code == 200
+        assert len(calls) == 2
+        assert calls[0].startswith("https://www.codebuddy.ai")
+        assert calls[1].startswith("https://www.workbuddy.ai")
+        assert "retrying over desktop token" in text
+
+    @pytest.mark.parametrize("gate_code", [6004, 11128])
+    def test_gated_request_without_token_path_surfaces_original_status(
+        self, direct_key_client, converter_module, monkeypatch, tmp_path, gate_code
+    ):
+        gate_body = {"error": {"code": gate_code, "message": f"code {gate_code} quota"}}
+        calls = []
+
+        class GatedOnlyClient:
+            def __init__(self, *a, **k):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            def stream(self, method, url, headers=None, json=None, **kw):
+                calls.append(url)
+                return self._gated_ctx(gate_body)
+
+        GatedOnlyClient._gated_ctx = staticmethod(TestGateFallback._gated_ctx)
+        monkeypatch.setattr(converter_module.httpx, "AsyncClient", GatedOnlyClient)
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert response.status_code == 403
+        assert len(calls) == 1
+
+
 class TestTokenPathUnchanged:
     def test_token_mode_requires_credential_manager(self, converter_module, client):
         # Without credentials the token path must fail with 503, not fall back

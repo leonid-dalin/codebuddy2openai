@@ -292,6 +292,27 @@ def _cred() -> CredentialManager:
     return CONFIG["cred"]
 
 
+def route_for_request() -> tuple[dict, str]:
+    """Headers and backend URL base for the configured request mode."""
+    if CONFIG.get("direct_key"):
+        headers = {"Content-Type": "application/json", "Accept": "application/json",
+                   "Authorization": f"Bearer {CONFIG['direct_key']}",
+                   "User-Agent": USER_AGENT}
+        return headers, DIRECT_KEY_BACKEND
+    headers = _cred().get_headers()
+    return headers, backend_for_domain((CONFIG["cred"]._session().get("auth") or {}).get("domain"))
+
+
+def _token_fallback_route() -> tuple[dict, str]:
+    """Headers and backend for the desktop-token path."""
+    cred = CONFIG["cred"]
+    headers = {"Content-Type": "application/json", "Accept": "application/json",
+               "User-Agent": USER_AGENT}
+    headers.update(cred.get_headers())
+    domain = (cred._session().get("auth") or {}).get("domain")
+    return headers, backend_for_domain(domain)
+
+
 @app.get("/health")
 def health():
     cred = CONFIG["cred"]
@@ -360,20 +381,7 @@ async def chat_completions(request: Request,
     if CONFIG.get("log_body"):
         _log(f"[{rid}] ── REQUEST BODY (发往后端) ──\n{json.dumps(body, ensure_ascii=False, indent=2)}")
 
-    if CONFIG.get("direct_key"):
-        # CK_* API-key mode: no desktop credential, plain Bearer against
-        # the international endpoint. Upstream rejects non-stream and
-        # system-less requests (errors 11101/11128); both are handled below.
-        headers = {"Content-Type": "application/json", "Accept": "application/json",
-                   "Authorization": f"Bearer {CONFIG['direct_key']}",
-                   "User-Agent": USER_AGENT}
-        backend = DIRECT_KEY_BACKEND
-    else:
-        headers = cred.get_headers()
-        # Backend depends on which realm the credentials belong to
-        # (WorkBuddy international -> www.workbuddy.ai, CodeBuddy CN -> copilot.tencent.com)
-        domain = (cred._session().get("auth") or {}).get("domain")
-        backend = backend_for_domain(domain)
+    headers, backend = route_for_request()
     # Upstream requires the first message to be a system prompt
     if messages and messages[0].get("role") != "system":
         body["messages"] = [{"role": "system", "content": "You are a helpful assistant."}] + body.get("messages", [])
@@ -387,9 +395,16 @@ async def chat_completions(request: Request,
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
-    # 非流式：后端只支持流式，这里把后端 SSE 聚合成单个 chat.completion 响应
+    collected = await complete_with_fallback(url, headers, body, model_name, rid)
+    _log_finish(model_name, t0, collected, rid)
+    return JSONResponse(content=collected)
+
+
+async def complete_with_fallback(url: str, headers: dict, body: dict,
+                                 model_name: str, rid: str) -> dict:
+    """Non-streaming completion with one gate-code retry over the desktop-token path."""
     try:
-        collected = await _post_collect(url, headers, body, model_name, rid)
+        return await _post_collect(url, headers, body, model_name, rid)
     except _UpstreamGateError as gate:
         # Key-path quota/channel gate: one retry over the desktop-token path,
         # when this machine has WorkBuddy credentials. Path-specific failure,
@@ -416,8 +431,7 @@ async def chat_completions(request: Request,
     except httpx.HTTPError as e:
         _log(f"[{rid}] ✗ 网络错误 | {model_name} | {e}")
         raise HTTPException(status_code=502, detail={"error": {"message": f"upstream error: {e}", "type": "upstream_error"}})
-    _log_finish(model_name, t0, collected, rid)
-    return JSONResponse(content=collected)
+    return collected
 
 
 def _last_user_text(messages: list) -> str:
@@ -593,7 +607,7 @@ def _token_fallback_ready() -> bool:
 
 def _token_fallback_route() -> tuple[dict, str]:
     """Headers and backend for the desktop-token path."""
-    cred = _cred()
+    cred = CONFIG["cred"]
     headers = {"Content-Type": "application/json", "Accept": "application/json",
                "User-Agent": USER_AGENT}
     headers.update(cred.get_headers())
