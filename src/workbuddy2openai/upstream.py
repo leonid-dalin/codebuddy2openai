@@ -13,8 +13,12 @@ import os
 import re
 import time
 
+from dataclasses import dataclass, field
+
 import httpx
 from fastapi import HTTPException
+
+from workbuddy2openai import protocol
 
 DIRECT_KEY_BACKEND = "https://www.codebuddy.ai"
 
@@ -42,7 +46,21 @@ PASSTHROUGH_BODY_KEYS = {
     "verbosity", "reasoning_summary",
 }
 
-TOKEN_PATH_RETRY_CODES = {6004, 11128}
+TOKEN_PATH_RETRY_CODES = protocol.TOKEN_PATH_RETRY_CODES
+
+_CHAT_URL = f"{protocol.BACKEND_CN}{protocol.CHAT_COMPLETIONS_PATH}"
+
+
+@dataclass
+class Route:
+    """Where a request goes and how it authenticates there."""
+
+    headers: dict = field(default_factory=dict)
+    base_url: str = protocol.BACKEND_CN
+    kind: str = "desktop-token"  # "direct-key" or "desktop-token"
+
+    def chat_url(self) -> str:
+        return f"{self.base_url}{protocol.CHAT_COMPLETIONS_PATH}"
 
 _LOG_SINK = None
 
