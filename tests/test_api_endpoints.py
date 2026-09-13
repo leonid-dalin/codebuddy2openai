@@ -240,6 +240,317 @@ class TestChatCompletionsDirectKeyMode:
         assert response.json()["choices"][0]["message"]["content"] == "PROXY OK"
 
 
+def sse_tool_call(model: str = "glm-5.2") -> bytes:
+    payload = {
+        "id": "cmb-t", "model": model, "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "choices": [{"index": 0,
+                     "delta": {"tool_calls": [{"index": 0, "id": "call_1",
+                                               "type": "function",
+                                               "function": {"name": "get_weather",
+                                                            "arguments": '{"city": "x"'}},
+                                              {"index": 0,
+                                               "function": {"arguments": ',"unit":"c"}'}}]},
+                     "finish_reason": ""}],
+        "usage": None,
+    }
+    return f"data: {json.dumps(payload)}\n\n".encode()
+
+
+def sse_tool_finish(model: str = "glm-5.2") -> bytes:
+    payload = {
+        "id": "cmb-t", "model": model, "object": "chat.completion.chunk",
+        "created": 1700000000,
+        "choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}],
+        "usage": {"prompt_tokens": 5, "completion_tokens": 7, "total_tokens": 12},
+    }
+    return f"data: {json.dumps(payload)}\n\n".encode()
+
+
+def sse_minimal_chunk(finish_reason: str = "", content: str | None = None) -> bytes:
+    delta = {"content": content} if content is not None else {}
+    payload = {
+        "id": "x", "model": "m", "object": "chat.completion.chunk",
+        "created": 0,
+        "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
+        "usage": None,
+    }
+    return f"data: {json.dumps(payload)}\n\ndata: [DONE]\n\n".encode()
+
+
+class TestCollectStreamAggregation:
+    def test_tool_calls_reassembled_in_order(
+        self, direct_key_client, converter_module, upstream_ok
+    ):
+        upstream_ok([sse_tool_call(), sse_tool_finish()])
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "weather?"}],
+        })
+        message = response.json()["choices"][0]["message"]
+        (tc,) = message["tool_calls"]
+        assert tc["id"] == "call_1"
+        assert tc["type"] == "function"
+        assert tc["function"]["name"] == "get_weather"
+        assert tc["function"]["arguments"] == '{"city": "x","unit":"c"}'
+
+    def test_tool_calls_finish_reason_defaulted_when_upstream_omits_it(
+        self, direct_key_client, converter_module, upstream_ok
+    ):
+        upstream_ok([sse_tool_call(), sse_minimal_chunk()])
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "weather?"}],
+        })
+        assert response.json()["choices"][0]["finish_reason"] == "tool_calls"
+
+    def test_usage_carried_from_final_chunk(
+        self, direct_key_client, converter_module, upstream_ok
+    ):
+        upstream_ok([sse_chunk("OK"), sse_finish()])
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert response.json()["usage"]["total_tokens"] == 2
+
+    def test_usage_zeroed_when_upstream_sends_none(
+        self, direct_key_client, converter_module, upstream_ok
+    ):
+        upstream_ok([sse_chunk("OK"), sse_minimal_chunk("stop")])
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert response.json()["usage"] == {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+    def test_model_field_taken_from_upstream_chunks(
+        self, direct_key_client, converter_module, upstream_ok
+    ):
+        upstream_ok([sse_chunk("OK", model="hy3"), sse_finish(model="hy3")])
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "hy3",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert response.json()["model"] == "hy3"
+
+    def test_stream_options_include_usage_injected_when_absent(
+        self, direct_key_client, converter_module, upstream_ok
+    ):
+        upstream = upstream_ok([sse_chunk("OK"), sse_finish()])
+        direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert upstream.last["body"]["stream_options"] == {"include_usage": True}
+
+    def test_response_format_passthrough(
+        self, direct_key_client, converter_module, upstream_ok
+    ):
+        upstream = upstream_ok([sse_chunk("OK"), sse_finish()])
+        direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+            "response_format": {"type": "json_object"},
+        })
+        assert upstream.last["body"]["response_format"] == {"type": "json_object"}
+
+    def test_finish_reason_defaults_to_stop_without_tool_calls(
+        self, direct_key_client, converter_module, upstream_ok
+    ):
+        upstream_ok([sse_chunk("OK"), sse_minimal_chunk()])
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert response.json()["choices"][0]["finish_reason"] == "stop"
+
+    def test_model_default_is_auto(
+        self, direct_key_client, converter_module, upstream_ok
+    ):
+        upstream = upstream_ok([sse_chunk("OK"), sse_finish()])
+        direct_key_client.post("/v1/chat/completions", json={
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert upstream.last["body"]["model"] == "auto"
+
+    def test_tool_calls_ordered_by_index_across_two_indices(
+        self, direct_key_client, converter_module, upstream_ok
+    ):
+        payload = {
+            "id": "cmb-t2", "model": "glm-5.2", "object": "chat.completion.chunk",
+            "created": 1700000000,
+            "choices": [{"index": 0,
+                         "delta": {"tool_calls": [
+                             {"index": 1, "id": "call_2", "type": "function",
+                              "function": {"name": "get_time", "arguments": "{}"}},
+                             {"index": 0, "id": "call_1", "type": "function",
+                              "function": {"name": "get_weather", "arguments": "{}"}},
+                         ]},
+                         "finish_reason": "tool_calls"}],
+            "usage": None,
+        }
+        upstream_ok([f"data: {json.dumps(payload)}\n\n".encode(),
+                     f"data: [DONE]\n\n".encode()])
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "tools?"}],
+        })
+        tcs = response.json()["choices"][0]["message"]["tool_calls"]
+        assert [tc["id"] for tc in tcs] == ["call_1", "call_2"]
+
+    def test_empty_content_is_none_when_upstream_sends_no_content(
+        self, direct_key_client, converter_module, upstream_ok
+    ):
+        payload = {
+            "id": "x", "model": "m", "object": "chat.completion.chunk",
+            "created": 0,
+            "choices": [{"index": 0,
+                         "delta": {"role": "assistant", "tool_calls": [
+                             {"index": 0, "id": "c1", "type": "function",
+                              "function": {"name": "f", "arguments": "{}"}}]},
+                         "finish_reason": "tool_calls"}],
+            "usage": None,
+        }
+        upstream_ok([f"data: {json.dumps(payload)}\n\ndata: [DONE]\n\n".encode()])
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert response.json()["choices"][0]["message"]["content"] is None
+
+
+class TestErrCode:
+    @pytest.mark.parametrize("detail,expected", [
+        ({"error": {"code": 6004}}, 6004),
+        ({"error": {"code": "11128"}}, 11128),
+        ({"error": {"msg_code": 6004}}, 6004),
+        ({"error": {"message": 'code 6004 quota'}}, 6004),
+        ({"error": {"msg": "code:11128 gated"}}, 11128),
+        ({"error": {"message": "nothing numeric here"}}, None),
+        ({"error": {}}, None),
+        ({"error": {"code": 6004, "msg_code": 11128}}, 6004),
+    ])
+    def test_extracts_upstream_code(self, converter_module, detail, expected):
+        assert converter_module._err_code(detail) == expected
+
+
+class TestLogPrivacy:
+    def test_full_request_body_not_logged_by_default(
+        self, direct_key_client, converter_module, upstream_ok, tmp_path
+    ):
+        log_file = tmp_path / "conv.log"
+        converter_module.CONFIG["log_path"] = str(log_file)
+        upstream_ok([sse_chunk("OK"), sse_finish()])
+        direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "filler text. " * 8 + "private secret content"}],
+        })
+        text = log_file.read_text(encoding="utf-8")
+        assert "private secret content" not in text
+        assert "REQUEST" in text
+        converter_module.CONFIG["log_path"] = None
+
+    def test_direct_key_value_never_logged(
+        self, direct_key_client, converter_module, upstream_ok, tmp_path
+    ):
+        log_file = tmp_path / "conv.log"
+        converter_module.CONFIG["log_path"] = str(log_file)
+        upstream_ok([sse_chunk("OK"), sse_finish()])
+        direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert "ck_test_dummy" not in log_file.read_text(encoding="utf-8")
+        converter_module.CONFIG["log_path"] = None
+
+    def test_full_response_body_not_logged_by_default(
+        self, direct_key_client, converter_module, upstream_ok, tmp_path
+    ):
+        log_file = tmp_path / "conv.log"
+        converter_module.CONFIG["log_path"] = str(log_file)
+        upstream_ok([sse_chunk("private response content"), sse_finish()])
+        direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        text = log_file.read_text(encoding="utf-8")
+        assert "private response content" not in text
+        assert "RESPONSE" in text
+        converter_module.CONFIG["log_path"] = None
+
+    def test_raw_stream_not_logged_by_default(
+        self, direct_key_client, converter_module, upstream_ok, tmp_path
+    ):
+        log_file = tmp_path / "conv.log"
+        converter_module.CONFIG["log_path"] = str(log_file)
+        upstream_ok([sse_chunk("raw stream content"), sse_finish()])
+        direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": True,
+        })
+        text = log_file.read_text(encoding="utf-8")
+        assert "raw stream content" not in text
+        assert "RESPONSE" in text
+        converter_module.CONFIG["log_path"] = None
+
+    def test_log_body_flag_enables_full_payload_logging(
+        self, direct_key_client, converter_module, upstream_ok, tmp_path
+    ):
+        log_file = tmp_path / "conv.log"
+        converter_module.CONFIG["log_path"] = str(log_file)
+        converter_module.CONFIG["log_body"] = True
+        upstream_ok([sse_chunk("OK"), sse_finish()])
+        direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "private secret content"}],
+        })
+        converter_module.CONFIG["log_body"] = False
+        converter_module.CONFIG["log_path"] = None
+        text = log_file.read_text(encoding="utf-8")
+        assert "private secret content" in text
+
+
+class TestRelayRawForwarding:
+    def test_relay_forwards_raw_bytes_verbatim(
+        self, direct_key_client, converter_module, upstream_ok
+    ):
+        chunk = sse_chunk("X") + sse_finish()
+        upstream_ok([chunk])
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": True,
+        })
+        assert response.text.count("data: ") >= 2
+        assert '"content": "X"' in response.text
+
+    def test_relay_detects_content_filter_marker(
+        self, direct_key_client, converter_module, upstream_ok, tmp_path
+    ):
+        log_file = tmp_path / "conv.log"
+        converter_module.CONFIG["log_path"] = str(log_file)
+        converter_module.CONFIG["log_body"] = True
+        payload = {
+            "id": "cmb-f", "model": "glm-5.2", "object": "chat.completion.chunk",
+            "created": 1700000000,
+            "choices": [{"index": 0, "delta": {"content": "x"}, "finish_reason": "content-filter"}],
+            "usage": None,
+        }
+        upstream_ok([f"data: {json.dumps(payload)}\n\n".encode(), b"data: [DONE]\n\n"])
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": True,
+        })
+        assert response.status_code == 200
+        text = log_file.read_text(encoding="utf-8")
+        assert "RESPONSE RAW SSE" in text
+        assert '"content": "x"' in text
+        converter_module.CONFIG["log_path"] = None
+
+
 class TestChatCompletionsErrors:
     def test_missing_messages_rejected(self, direct_key_client):
         response = direct_key_client.post("/v1/chat/completions", json={"model": "glm-5.2"})
@@ -277,6 +588,126 @@ class TestChatCompletionsErrors:
             "max_tokens": 100,
         })
         assert response.status_code == 502
+
+
+class TestGateFallback:
+    @staticmethod
+    def _gated_ctx(gate_body):
+        class GatedCtx:
+            async def __aenter__(self):
+                class R:
+                    status_code = 403
+
+                    async def aread(self):
+                        return json.dumps(gate_body).encode()
+
+                return R()
+
+            async def __aexit__(self, *a):
+                return False
+
+        return GatedCtx()
+
+    @staticmethod
+    def _ok_ctx():
+        class OkCtx:
+            async def __aenter__(self):
+                class R:
+                    status_code = 200
+
+                    async def aiter_lines(self):
+                        yield "data: " + json.dumps({
+                            "id": "x", "model": "m",
+                            "object": "chat.completion.chunk", "created": 0,
+                            "choices": [{"index": 0,
+                                         "delta": {"content": "OK"},
+                                         "finish_reason": ""}],
+                            "usage": None})
+                        yield "data: [DONE]"
+
+                    async def aiter_bytes(self):
+                        yield b""
+
+                return R()
+
+            async def __aexit__(self, *a):
+                return False
+
+        return OkCtx()
+
+    @pytest.mark.parametrize("gate_code", [6004, 11128])
+    def test_gated_direct_key_retries_over_token_path(
+        self, direct_key_client, converter_module, monkeypatch, fake_auth_file,
+        tmp_path, gate_code
+    ):
+        gate_body = {"error": {"code": gate_code, "message": f"code {gate_code} quota"}}
+        calls = []
+        log_file = tmp_path / "conv.log"
+        converter_module.CONFIG["log_path"] = str(log_file)
+
+        class RoutedClient:
+            def __init__(self, *a, **k):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            def stream(self, method, url, headers=None, json=None, **kw):
+                calls.append(url)
+                if "codebuddy.ai" in url and len(calls) == 1:
+                    return self._gated_ctx(gate_body)
+                return self._ok_ctx()
+
+        RoutedClient._gated_ctx = staticmethod(TestGateFallback._gated_ctx)
+        RoutedClient._ok_ctx = staticmethod(TestGateFallback._ok_ctx)
+
+        path, payload = fake_auth_file
+        converter_module.CONFIG["cred"] = converter_module.CredentialManager(path)
+        monkeypatch.setattr(converter_module.httpx, "AsyncClient", RoutedClient)
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        text = log_file.read_text(encoding="utf-8")
+        converter_module.CONFIG["log_path"] = None
+        assert response.status_code == 200
+        assert len(calls) == 2
+        assert calls[0].startswith("https://www.codebuddy.ai")
+        assert calls[1].startswith("https://www.workbuddy.ai")
+        assert "retrying over desktop token" in text
+
+    @pytest.mark.parametrize("gate_code", [6004, 11128])
+    def test_gated_request_without_token_path_surfaces_original_status(
+        self, direct_key_client, converter_module, monkeypatch, tmp_path, gate_code
+    ):
+        gate_body = {"error": {"code": gate_code, "message": f"code {gate_code} quota"}}
+        calls = []
+
+        class GatedOnlyClient:
+            def __init__(self, *a, **k):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            def stream(self, method, url, headers=None, json=None, **kw):
+                calls.append(url)
+                return self._gated_ctx(gate_body)
+
+        GatedOnlyClient._gated_ctx = staticmethod(TestGateFallback._gated_ctx)
+        monkeypatch.setattr(converter_module.httpx, "AsyncClient", GatedOnlyClient)
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert response.status_code == 403
+        assert len(calls) == 1
 
 
 class TestTokenPathUnchanged:

@@ -31,7 +31,9 @@ Both select the project virtual environment when one exists, in this order: `.ve
 
 Any argument is passed through to `converter.py`, so the flags in the main README work unchanged.
 
-`.env` is loaded with `set -a`, so every variable in the file reaches the process environment. No secret is placed on the command line. The proxy binds to `127.0.0.1:8787` by default, and without a key in `.env` or `--api-key` it accepts any client on that port.
+`.env` is loaded with `set -a`, so every variable in the file reaches the process environment. No secret is placed on the command line; the `.env` file is the safer channel for keys. The proxy binds to `127.0.0.1:8787` by default, and without a key in `.env` or `--api-key` it accepts any client on that port.
+
+`--log` records request and response summaries only. Add `--log-body` alongside it to also write full request and response bodies and the raw upstream SSE stream to the log file. That capture includes every conversation, so keep it off outside debugging.
 
 ## Keeping it running
 

@@ -67,17 +67,17 @@ class TestModelCatalogs:
 
 
 class TestFindAuthFile:
-    def test_finds_info_file_in_windows_layout(self, converter_module, tmp_path, monkeypatch):
+    def test_finds_info_file_in_windows_layout(self, credentials_module, tmp_path, monkeypatch):
         auth_dir = tmp_path / "CodeBuddyExtension" / "Data" / "Public" / "auth"
         auth_dir.mkdir(parents=True)
         (auth_dir / "workbuddy-desktop-ai.info").write_text("{}", encoding="utf-8")
-        monkeypatch.setattr(converter_module, "auth_dirs", lambda: [auth_dir])
-        found = converter_module.find_auth_file()
+        monkeypatch.setattr(credentials_module, "auth_dirs", lambda: [auth_dir])
+        found = credentials_module.find_auth_file()
         assert found is not None and found.name == "workbuddy-desktop-ai.info"
 
-    def test_returns_none_when_directory_missing(self, converter_module, tmp_path, monkeypatch):
-        monkeypatch.setattr(converter_module, "auth_dirs", lambda: [tmp_path / "missing"])
-        assert converter_module.find_auth_file() is None
+    def test_returns_none_when_directory_missing(self, credentials_module, tmp_path, monkeypatch):
+        monkeypatch.setattr(credentials_module, "auth_dirs", lambda: [tmp_path / "missing"])
+        assert credentials_module.find_auth_file() is None
 
 
 class TestCredentialManager:
@@ -122,6 +122,47 @@ class TestCredentialManager:
         manager = self._manager(converter_module, path)
         summary = manager.summary()
         assert summary.get("nickname") == "tester@example.com"
+
+
+class TestRefreshRoute:
+    @pytest.mark.parametrize("domain,expected_backend", [
+        ("www.workbuddy.ai", "https://www.workbuddy.ai"),
+        ("www.codebuddy.cn", "https://copilot.tencent.com"),
+        (None, "https://copilot.tencent.com"),
+    ])
+    def test_refresh_url_follows_credential_domain(
+        self, converter_module, tmp_path, monkeypatch, domain, expected_backend
+    ):
+        payload = {
+            "account": {"uid": "u", "nickname": "n"},
+            "auth": {"accessToken": "t", "refreshToken": "r",
+                     "expiresAt": 9999999999999, "domain": domain},
+        }
+        auth_file = tmp_path / "cred.info"
+        auth_file.write_text(json.dumps(payload), encoding="utf-8")
+        manager = converter_module.CredentialManager(auth_file)
+        captured = {}
+
+        class FakeClient:
+            def __init__(self, *a, **k):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def post(self, url, **kwargs):
+                captured["url"] = url
+                captured["headers"] = kwargs.get("headers")
+                r = type("R", (), {})()
+                r.json = lambda: {"code": 0, "data": payload["auth"]}
+                return r
+
+        monkeypatch.setattr(converter_module.httpx, "Client", FakeClient)
+        manager._refresh()
+        assert captured["url"] == f"{expected_backend}/v2/plugin/auth/token/refresh"
 
 
 class TestCheckAuth:
