@@ -238,7 +238,8 @@ PASSTHROUGH_BODY_KEYS = {
 app = FastAPI(title="codebuddy2openai", version="2.0")
 CONFIG: dict = {"api_key": "", "cred": None, "log_path": None,
                 "desensitize": False,  # cred: CredentialManager | None
-                "direct_key": None}    # CK_* API-key mode: bypass desktop token entirely
+                "direct_key": None,
+                "log_body": False}    # CK_* API-key mode: bypass desktop token entirely
 DIRECT_KEY_BACKEND = "https://www.codebuddy.ai"
 
 
@@ -356,7 +357,8 @@ async def chat_completions(request: Request,
          + (f" | tools={tool_names}" if tool_names else "")
          + (f" | last_user={_truncate(last_user, 60)!r}" if last_user else ""))
     # 完整请求体（发往后端的实际内容；若启用脱敏，这里已是脱敏后）
-    _log(f"[{rid}] ── REQUEST BODY (发往后端) ──\n{json.dumps(body, ensure_ascii=False, indent=2)}")
+    if CONFIG.get("log_body"):
+        _log(f"[{rid}] ── REQUEST BODY (发往后端) ──\n{json.dumps(body, ensure_ascii=False, indent=2)}")
 
     if CONFIG.get("direct_key"):
         # CK_* API-key mode: no desktop credential, plain Bearer against
@@ -450,7 +452,8 @@ def _log_finish(model_name: str, t0: float, result: dict, rid: str = ""):
          + (f" | tool_calls={tc_names}" if tc_names else "")
          + f" | tokens={usage.get('total_tokens', '?')}")
     # 完整响应体
-    _log(f"{prefix}── RESPONSE BODY ──\n{json.dumps(result, ensure_ascii=False, indent=2)}")
+    if CONFIG.get("log_body"):
+        _log(f"{prefix}── RESPONSE BODY ──\n{json.dumps(result, ensure_ascii=False, indent=2)}")
 
 
 def _parse_sse_data(data: str | bytes) -> dict | None:
@@ -702,7 +705,8 @@ async def _stream_upstream(url: str, headers: dict, body: dict,
          + (f" | tool_calls={tool_names}" if tool_names else "")
          + f" | tokens={usage.get('total_tokens', '?')}")
     # 完整原始 SSE（后端返回的全部内容）
-    _log(f"{prefix}── RESPONSE RAW SSE ──\n{b''.join(raw_parts).decode('utf-8','replace')}")
+    if CONFIG.get("log_body"):
+        _log(f"{prefix}── RESPONSE RAW SSE ──\n{b''.join(raw_parts).decode('utf-8','replace')}")
 
 
 def _err_event(msg: bytes, status: int) -> bytes:
@@ -755,6 +759,8 @@ def main():
     ap.add_argument("--desensitize", action="store_true",
                     help="启用脱敏：对 system 消息里的合规模板敏感词（DoS/exploit/credential 等）"
                          "插入零宽空格，缓解被后端内容审核误拦。默认关闭。")
+    ap.add_argument("--log-body", action="store_true",
+                    help="记录完整请求/响应体与原始 SSE 到日志（--log 开启时生效）。默认关闭。")
     ap.add_argument("--direct-key", default=_env_first("WORKBUDDY_DIRECT_KEY", "CODEBUDDY_DIRECT_KEY"),
                     help="CK_* CodeBuddy API key: bypass desktop session, call the international backend directly")
     ap.add_argument("--skip-check", action="store_true", help="跳过启动预检")
@@ -765,6 +771,7 @@ def main():
     CONFIG["direct_key"] = (args.direct_key or "").strip() or None
     # --log 直接指定文件路径即开启；不传则不记
     CONFIG["log_path"] = args.log if args.log else (_env_first("WORKBUDDY2OPENAI_LOG", "CODEBUDDY2OPENAI_LOG") or None)
+    CONFIG["log_body"] = args.log_body
     af = find_auth_file()
     CONFIG["cred"] = CredentialManager(af) if (af and not CONFIG["direct_key"]) else None
 

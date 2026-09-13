@@ -435,6 +435,83 @@ class TestErrCode:
         assert converter_module._err_code(detail) == expected
 
 
+class TestLogPrivacy:
+    def test_full_request_body_not_logged_by_default(
+        self, direct_key_client, converter_module, upstream_ok, tmp_path
+    ):
+        log_file = tmp_path / "conv.log"
+        converter_module.CONFIG["log_path"] = str(log_file)
+        upstream_ok([sse_chunk("OK"), sse_finish()])
+        direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "filler text. " * 8 + "private secret content"}],
+        })
+        text = log_file.read_text(encoding="utf-8")
+        assert "private secret content" not in text
+        assert "REQUEST" in text
+        converter_module.CONFIG["log_path"] = None
+
+    def test_direct_key_value_never_logged(
+        self, direct_key_client, converter_module, upstream_ok, tmp_path
+    ):
+        log_file = tmp_path / "conv.log"
+        converter_module.CONFIG["log_path"] = str(log_file)
+        upstream_ok([sse_chunk("OK"), sse_finish()])
+        direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        assert "ck_test_dummy" not in log_file.read_text(encoding="utf-8")
+        converter_module.CONFIG["log_path"] = None
+
+    def test_full_response_body_not_logged_by_default(
+        self, direct_key_client, converter_module, upstream_ok, tmp_path
+    ):
+        log_file = tmp_path / "conv.log"
+        converter_module.CONFIG["log_path"] = str(log_file)
+        upstream_ok([sse_chunk("private response content"), sse_finish()])
+        direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        text = log_file.read_text(encoding="utf-8")
+        assert "private response content" not in text
+        assert "RESPONSE" in text
+        converter_module.CONFIG["log_path"] = None
+
+    def test_raw_stream_not_logged_by_default(
+        self, direct_key_client, converter_module, upstream_ok, tmp_path
+    ):
+        log_file = tmp_path / "conv.log"
+        converter_module.CONFIG["log_path"] = str(log_file)
+        upstream_ok([sse_chunk("raw stream content"), sse_finish()])
+        direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": True,
+        })
+        text = log_file.read_text(encoding="utf-8")
+        assert "raw stream content" not in text
+        assert "RESPONSE" in text
+        converter_module.CONFIG["log_path"] = None
+
+    def test_log_body_flag_enables_full_payload_logging(
+        self, direct_key_client, converter_module, upstream_ok, tmp_path
+    ):
+        log_file = tmp_path / "conv.log"
+        converter_module.CONFIG["log_path"] = str(log_file)
+        converter_module.CONFIG["log_body"] = True
+        upstream_ok([sse_chunk("OK"), sse_finish()])
+        direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "private secret content"}],
+        })
+        converter_module.CONFIG["log_body"] = False
+        converter_module.CONFIG["log_path"] = None
+        text = log_file.read_text(encoding="utf-8")
+        assert "private secret content" in text
+
+
 class TestRelayRawForwarding:
     def test_relay_forwards_raw_bytes_verbatim(
         self, direct_key_client, converter_module, upstream_ok
@@ -454,6 +531,7 @@ class TestRelayRawForwarding:
     ):
         log_file = tmp_path / "conv.log"
         converter_module.CONFIG["log_path"] = str(log_file)
+        converter_module.CONFIG["log_body"] = True
         payload = {
             "id": "cmb-f", "model": "glm-5.2", "object": "chat.completion.chunk",
             "created": 1700000000,
