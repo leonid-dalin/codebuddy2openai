@@ -36,13 +36,13 @@ def credentials_module(converter_module):
 def fresh_config(converter_module):
     """Reset CONFIG to defaults so tests cannot leak state into each other."""
     converter_module.CONFIG["api_key"] = ""
-    converter_module.CONFIG["desensitize"] = False
+    converter_module.CONFIG["mask"] = False
     converter_module.CONFIG["log_path"] = None
     converter_module.CONFIG["direct_key"] = None
     converter_module.CONFIG["cred"] = None
     yield converter_module.CONFIG
     converter_module.CONFIG["api_key"] = ""
-    converter_module.CONFIG["desensitize"] = False
+    converter_module.CONFIG["mask"] = False
     converter_module.CONFIG["log_path"] = None
     converter_module.CONFIG["direct_key"] = None
     converter_module.CONFIG["cred"] = None

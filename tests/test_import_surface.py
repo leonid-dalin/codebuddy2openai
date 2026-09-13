@@ -59,8 +59,8 @@ def test_runtime_config_is_one_dict(split_modules):
     del app.CONFIG["probe_key"]
 
 
-def test_desensitize_fallback_present(split_modules):
-    assert callable(split_modules["app"].desensitize_body)
+def test_masking_fallback_present(split_modules):
+    assert callable(split_modules["app"].mask_body)
 
 
 def test_models_owned_by_value_stable(client):

@@ -45,14 +45,14 @@ from upstream import (
 )
 
 try:
-    from desensitize import desensitize_body
+    from masking import mask_body
 except ImportError:
-    def desensitize_body(body, roles=("system",)):
+    def mask_body(body, roles=("system",)):
         return body
 
 app = FastAPI(title="workbuddy2openai", version="2.0")
 CONFIG: dict = {"api_key": "", "cred": None, "log_path": None,
-                "desensitize": False,
+                "mask": False,
                 "direct_key": None,
                 "log_body": False}
 
@@ -218,8 +218,8 @@ async def chat_completions(request: Request,
     if "stream_options" not in body:
         body["stream_options"] = {"include_usage": True}
 
-    if CONFIG.get("desensitize"):
-        body = desensitize_body(body, roles=("system",))
+    if CONFIG.get("mask"):
+        body = mask_body(body, roles=("system",))
 
     model_name = payload.get("model", "auto")
     tool_names = [t.get("function", {}).get("name") for t in (payload.get("tools") or [])
