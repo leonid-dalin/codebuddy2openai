@@ -18,12 +18,11 @@ import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from workbuddy2openai import protocol
 from workbuddy2openai.credentials import (
-    BACKEND,
     USER_AGENT,
     CredentialManager,
     auth_dirs,
-    backend_for_domain,
     find_auth_file,
 )
 from workbuddy2openai.upstream import (
@@ -31,6 +30,7 @@ from workbuddy2openai.upstream import (
     DIRECT_KEY_BACKEND,
     INTL_MODELS,
     PASSTHROUGH_BODY_KEYS,
+    Route,
     _UpstreamGateError,
     _post_collect,
     _stream_upstream,
@@ -94,15 +94,18 @@ def _cred() -> CredentialManager:
     return CONFIG["cred"]
 
 
-def route_for_request() -> tuple[dict, str]:
-    """Headers and backend URL base for the configured request mode."""
+def route_for_request() -> Route:
+    """The upstream route for the configured request mode."""
     if CONFIG.get("direct_key"):
-        headers = {"Content-Type": "application/json", "Accept": "application/json",
-                   "Authorization": f"Bearer {CONFIG['direct_key']}",
-                   "User-Agent": USER_AGENT}
-        return headers, DIRECT_KEY_BACKEND
-    headers = _cred().get_headers()
-    return headers, backend_for_domain((CONFIG["cred"]._session().get("auth") or {}).get("domain"))
+        return Route(
+            headers={"Content-Type": "application/json", "Accept": "application/json",
+                     "Authorization": f"Bearer {CONFIG['direct_key']}",
+                     "User-Agent": USER_AGENT},
+            base_url=DIRECT_KEY_BACKEND,
+            kind="direct-key",
+        )
+    cred = _cred()
+    return Route(cred.get_headers(), cred.backend_url(), kind="desktop-token")
 
 
 def _token_fallback_ready() -> bool:
@@ -117,13 +120,14 @@ def _token_fallback_ready() -> bool:
         return False
 
 
-def _token_fallback_route() -> tuple[dict, str]:
+def _token_fallback_route() -> Route:
     cred = CONFIG["cred"]
-    headers = {"Content-Type": "application/json", "Accept": "application/json",
-               "User-Agent": USER_AGENT}
-    headers.update(cred.get_headers())
-    domain = (cred._session().get("auth") or {}).get("domain")
-    return headers, backend_for_domain(domain)
+    return Route(
+        headers={"Content-Type": "application/json", "Accept": "application/json",
+                 "User-Agent": USER_AGENT, **cred.get_headers()},
+        base_url=cred.backend_url(),
+        kind="desktop-token",
+    )
 
 
 def _last_user_text(messages: list) -> str:
@@ -220,39 +224,38 @@ async def chat_completions(request: Request,
     if CONFIG.get("log_body"):
         _log(f"[{rid}] ── REQUEST BODY (发往后端) ──\n{json.dumps(body, ensure_ascii=False, indent=2)}")
 
-    headers, backend = route_for_request()
+    route = route_for_request()
     if messages and messages[0].get("role") != "system":
         body["messages"] = [{"role": "system", "content": "You are a helpful assistant."}] + body.get("messages", [])
-    url = f"{backend}/v2/chat/completions"
+    url = route.chat_url()
     t0 = time.time()
 
     if client_wants_stream:
         return StreamingResponse(
-            _stream_upstream(url, headers, body, model_name, t0, rid,
+            _stream_upstream(url, route.headers, body, model_name, t0, rid,
                              log_body=bool(CONFIG.get("log_body"))),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
-    collected = await complete_with_fallback(url, headers, body, model_name, rid)
+    collected = await complete_with_fallback(route, body, model_name, rid)
     _log_finish(model_name, t0, collected, rid)
     return JSONResponse(content=collected)
 
 
-async def complete_with_fallback(url: str, headers: dict, body: dict,
+async def complete_with_fallback(route: Route, body: dict,
                                  model_name: str, rid: str) -> dict:
     """Non-streaming completion with one gate-code retry over the desktop-token path."""
     try:
-        return await _post_collect(url, headers, body, model_name, rid)
+        return await _post_collect(route.chat_url(), route.headers, body, model_name, rid)
     except _UpstreamGateError as gate:
         if not _token_fallback_ready():
             _log(f"[{rid}] ✗ {gate.code} and no desktop token path - surfacing")
             raise gate.http_exc
-        fb_headers, fb_backend = _token_fallback_route()
-        fb_url = f"{fb_backend}/v2/chat/completions"
-        _log(f"[{rid}] ↻ {gate.code} on key path - retrying over desktop token ({fb_backend})")
+        fb_route = _token_fallback_route()
+        _log(f"[{rid}] ↻ {gate.code} on key path - retrying over desktop token ({fb_route.base_url})")
         try:
-            collected = await _post_collect(fb_url, fb_headers, body, model_name, rid)
+            collected = await _post_collect(fb_route.chat_url(), fb_route.headers, body, model_name, rid)
             _log(f"[{rid}] ✓ desktop-token retry succeeded")
         except _UpstreamGateError as gate2:
             _log(f"[{rid}] ✗ desktop-token retry also gated ({gate2.code}) - surfacing original")
@@ -275,7 +278,7 @@ def preflight() -> bool:
     sys.stderr.write("==== preflight ====\n")
     sys.stderr.write(f"platform   : {sys.platform}\n")
     sys.stderr.write(f"python     : {sys.version.split()[0]}\n")
-    sys.stderr.write(f"backend    : {BACKEND} (direct, native function calling)\n")
+    sys.stderr.write(f"backend    : {protocol.BACKEND_CN} (direct, native function calling)\n")
     sys.stderr.write(f"login file : {af or '(not found)'}\n")
     if auth_dirs():
         sys.stderr.write(f"searched   : {', '.join(str(d) for d in auth_dirs())}\n")

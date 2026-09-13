@@ -1,7 +1,7 @@
 """Backend protocol contract.
 
 Values read off the WorkBuddy desktop client. Check this file first when
-a client update breaks requests.
+a client update breaks requests
 """
 
 from __future__ import annotations
