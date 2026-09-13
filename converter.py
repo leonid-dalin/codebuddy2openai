@@ -129,7 +129,7 @@ class CredentialManager:
         headers = self._build_headers_from(auth, s.get("account") or {})
         headers["X-Refresh-Token"] = auth.get("refreshToken", "")
         headers["X-Auth-Refresh-Source"] = "plugin"
-        url = f"{BACKEND}/v2/plugin/auth/token/refresh"
+        url = f"{backend_for_domain(auth.get('domain'))}/v2/plugin/auth/token/refresh"
         try:
             with httpx.Client(timeout=15) as c:
                 r = c.post(url, headers=headers, json={})

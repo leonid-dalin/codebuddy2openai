@@ -124,6 +124,47 @@ class TestCredentialManager:
         assert summary.get("nickname") == "tester@example.com"
 
 
+class TestRefreshRoute:
+    @pytest.mark.parametrize("domain,expected_backend", [
+        ("www.workbuddy.ai", "https://www.workbuddy.ai"),
+        ("www.codebuddy.cn", "https://copilot.tencent.com"),
+        (None, "https://copilot.tencent.com"),
+    ])
+    def test_refresh_url_follows_credential_domain(
+        self, converter_module, tmp_path, monkeypatch, domain, expected_backend
+    ):
+        payload = {
+            "account": {"uid": "u", "nickname": "n"},
+            "auth": {"accessToken": "t", "refreshToken": "r",
+                     "expiresAt": 9999999999999, "domain": domain},
+        }
+        auth_file = tmp_path / "cred.info"
+        auth_file.write_text(json.dumps(payload), encoding="utf-8")
+        manager = converter_module.CredentialManager(auth_file)
+        captured = {}
+
+        class FakeClient:
+            def __init__(self, *a, **k):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def post(self, url, **kwargs):
+                captured["url"] = url
+                captured["headers"] = kwargs.get("headers")
+                r = type("R", (), {})()
+                r.json = lambda: {"code": 0, "data": payload["auth"]}
+                return r
+
+        monkeypatch.setattr(converter_module.httpx, "Client", FakeClient)
+        manager._refresh()
+        assert captured["url"] == f"{expected_backend}/v2/plugin/auth/token/refresh"
+
+
 class TestCheckAuth:
     def test_open_access_when_no_server_key_configured(self, converter_module, fresh_config):
         # Without --api-key the converter does not require client credentials.
