@@ -63,7 +63,7 @@ ZCode / Cherry Studio / 任意 OpenAI 客户端
 ```bash
 # 1. 克隆
 git clone https://github.com/leonid-dalin/codebuddy2openai.git
-cd codebuddy2openai
+cd workbuddy2openai
 
 # 2. 装依赖
 pip install -r requirements.txt
@@ -119,7 +119,7 @@ python3 -m workbuddy2openai.converter --direct-key ck_你的密钥
 
 - 请求必须 `stream: true`，非流式会被拒（错误码 `11101`）。转换器对上游永远走流式、再按客户端要求聚合，所以只有自己裸调接口才会碰到
 - 第一条消息必须是 `system` 角色（错误码 `11128`）。转换器会在客户端没给时自动补一条
-- 模型 ID **区分大小写**，未知的直接拒（错误码 `11102`）：`hy3` 可以，`Hy3` 不行
+- 模型 ID 大小写不敏感（转换器会折成小写）；未知的 ID 仍被后端拒绝（错误码 `11102`）
 - `gpt-5.6-luna` 等模型对过小的 `max_tokens` 会拒绝（错误码 `11133`，integer_below_min_value），建议 ≥100
 
 密钥是有效凭证，按密码对待，到期记得轮换
@@ -166,12 +166,12 @@ python3 -m workbuddy2openai.converter [--host HOST] [--port PORT] [--api-key KEY
 
 API 密钥模式（国际版，2026-08-31 实测）：`auto`、`hy3`、`hy4-preview`、`glm-5.3`、`glm-5.2`、`glm-5.1`、`glm-5v-turbo`、`minimax-m3`、`kimi-k3`、`kimi-k2.7`、`kimi-k2.6`、`deepseek-v4-pro`、`deepseek-v4-flash`、`deepseek-v4.1-flash`、`gpt-5.6-luna`、`gpt-5.6-terra`、`gpt-5.6-sol`、`gemini-3.1-pro`
 
-具体可用性以你的订阅为准；模型 ID 区分大小写
+具体可用性以你的订阅为准；模型 ID 大小写不敏感，拼写需与目录一致
 
 ### 📁 项目结构
 
 ```
-codebuddy2openai/
+workbuddy2openai/
 ├── src/workbuddy2openai/
 │   ├── converter.py     # 入口（python -m workbuddy2openai.converter）
 │   ├── app.py           # FastAPI 端点、客户端鉴权、回退重试

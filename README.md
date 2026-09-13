@@ -21,7 +21,7 @@
 
 ```bash
 git clone https://github.com/leonid-dalin/codebuddy2openai.git
-cd codebuddy2openai
+cd workbuddy2openai
 pip install -r requirements.txt
 python3 -m workbuddy2openai.converter
 ```
@@ -68,7 +68,7 @@ Backend quirks worth knowing (they produce confusing errors if you meet them bli
 
 - Requests must use `stream: true`; non-stream calls are rejected with error `11101`. The converter always streams upstream and aggregates when the client asked for non-streaming, so this only matters for raw calls.
 - The first message must have role `system` (error `11128`). The converter prepends a system message when the client omits one.
-- Model IDs are case-sensitive and reject unknown values with error `11102` (`Hy3` fails, `hy3` works).
+- Model IDs are case-insensitive (the proxy folds them to lowercase); unknown values are still rejected by the backend with error `11102`.
 - `gpt-5.6-luna` and friends reject very small `max_tokens` values (error `11133`, "integer_below_min_value"); stay above roughly 100.
 
 The key is a live credential: treat it like a password, and expect to rotate it when it expires.
@@ -105,7 +105,7 @@ python3 -m workbuddy2openai.converter [--host HOST] [--port PORT] [--api-key KEY
 ### 📁 Project structure
 
 ```
-codebuddy2openai/
+workbuddy2openai/
 ├── src/workbuddy2openai/
 │   ├── converter.py     # entry point (python -m workbuddy2openai.converter)
 │   ├── app.py           # FastAPI endpoints, client auth, fallback retry
