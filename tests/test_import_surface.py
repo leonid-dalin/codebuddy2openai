@@ -74,6 +74,14 @@ def test_app_imports_when_masking_blocked(monkeypatch):
     monkeypatch.delitem(sys.modules, "workbuddy2openai.app", raising=False)
 
 
+def test_model_ids_in_catalogs_are_lowercase():
+    """The request path lowercases the client's model value; that is only
+    safe while every catalog ID is lowercase."""
+    import workbuddy2openai.upstream as upstream
+    for catalog in (upstream.CN_MODELS, upstream.INTL_MODELS):
+        assert catalog == [m.lower() for m in catalog]
+
+
 def test_models_owned_by_value_stable(client):
     response = client.get("/v1/models")
     assert {m["owned_by"] for m in response.json()["data"]} == {"codebuddy"}

@@ -334,6 +334,20 @@ class TestCollectStreamAggregation:
         })
         assert response.json()["model"] == "hy3"
 
+    def test_model_id_is_lowercased_before_send(
+        self, direct_key_client, converter_module, upstream_ok
+    ):
+        """Catalog IDs are all lowercase, so folding the client's value
+        makes Hy3 and HY3 work while the backend keeps rejecting unknown
+        IDs with 11102."""
+        upstream = upstream_ok([sse_chunk("OK"), sse_finish()])
+        direct_key_client.post("/v1/chat/completions", json={
+            "model": "Hy3",
+            "messages": [{"role": "user", "content": "hi"}],
+        })
+        sent = upstream.last["body"]
+        assert sent["model"] == "hy3"
+
     def test_stream_options_include_usage_injected_when_absent(
         self, direct_key_client, converter_module, upstream_ok
     ):
