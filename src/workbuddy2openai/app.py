@@ -205,7 +205,7 @@ async def chat_completions(request: Request,
 
     client_wants_stream = bool(payload.get("stream"))
     body = {k: payload[k] for k in PASSTHROUGH_BODY_KEYS if k in payload}
-    body.setdefault("model", "auto")
+    body["model"] = str(body.get("model", "auto")).lower()
     body["stream"] = True
     if "stream_options" not in body:
         body["stream_options"] = {"include_usage": True}
