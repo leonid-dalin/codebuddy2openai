@@ -21,6 +21,7 @@ def converter_module():
 
     import workbuddy2openai.app as app_module
     import workbuddy2openai.credentials as credentials
+    import workbuddy2openai.converter as converter
     import workbuddy2openai.upstream as upstream
 
     return SimpleNamespace(
@@ -34,6 +35,8 @@ def converter_module():
         INTL_MODELS=upstream.INTL_MODELS,
         DEFAULT_MODELS=upstream.DEFAULT_MODELS,
         _err_code=upstream._err_code,
+        _html_err_message=upstream._html_err_message,
+        load_dotenv=converter.load_dotenv,
         httpx=httpx,
     )
 

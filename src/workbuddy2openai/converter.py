@@ -24,7 +24,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
+from pathlib import Path
 
 import uvicorn
 
@@ -41,7 +43,28 @@ from workbuddy2openai.credentials import (
 )
 
 
+def load_dotenv() -> None:
+    """Put .env values into the environment without overriding real ones.
+
+    Runs before argument defaults are resolved, so every _env_first
+    lookup sees the file. Values already in os.environ win.
+    """
+    for candidate in (Path.cwd() / ".env", Path(__file__).resolve().parents[2] / ".env"):
+        if not candidate.is_file():
+            continue
+        for line in candidate.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            name, _, value = line.partition("=")
+            name, value = name.strip(), value.strip().strip("'\"")
+            if name and name not in os.environ:
+                os.environ[name] = value
+        return
+
+
 def main():
+    load_dotenv()
     ap = argparse.ArgumentParser(description="WorkBuddy to OpenAI-compatible converter (direct backend)")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8787)

@@ -174,7 +174,23 @@ def _safe_err_raw(raw: bytes, status: int) -> dict:
     try:
         return json.loads(raw.decode("utf-8", "replace"))
     except Exception:
-        return {"error": {"message": raw.decode("utf-8", "replace")[:500], "type": "upstream_error", "code": status}}
+        return {"error": {"message": _html_err_message(raw, status), "type": "upstream_error", "code": status}}
+
+
+def _html_err_message(raw: bytes, status: int) -> str:
+    """Collapse an HTML error page to one readable line.
+
+    The gateway answers plain-HTML 401/502 pages (openresty/APISIX) that
+    lose all meaning when pasted whole into a client's error field.
+    """
+    text = raw.decode("utf-8", "replace")
+    title = re.search(r"<title>(.*?)</title>", text, re.IGNORECASE | re.DOTALL)
+    if title:
+        # the first <center> holds the heading itself; the server name is the last one
+        servers = re.findall(r"<center>(.*?)</center>", text, re.IGNORECASE | re.DOTALL)
+        hint = f" (gateway: {servers[-1].strip()})" if len(servers) > 1 else ""
+        return f"upstream returned HTTP {status}: {title.group(1).strip()}{hint}"
+    return text[:500]
 
 
 def _err_code(detail: dict) -> int | None:

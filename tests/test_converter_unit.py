@@ -217,3 +217,31 @@ class TestCredGuard:
         with pytest.raises(HTTPException) as exc:
             converter_module._cred()
         assert exc.value.status_code == 503
+
+
+class TestLoadDotenv:
+    def test_values_reach_environment_without_overriding(self, converter_module, tmp_path, monkeypatch):
+        (tmp_path / ".env").write_text('WORKBUDDY_DIRECT_KEY="ck_from_file"\n# comment\nBAD LINE\nWORKBUDDY2OPENAI_LOG=log.txt\n', encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("WORKBUDDY2OPENAI_LOG", "from-shell")
+        monkeypatch.delenv("WORKBUDDY_DIRECT_KEY", raising=False)
+        converter_module.load_dotenv()
+        import os
+        assert os.environ["WORKBUDDY_DIRECT_KEY"] == "ck_from_file"
+        assert os.environ["WORKBUDDY2OPENAI_LOG"] == "from-shell"
+
+    def test_missing_file_is_silent(self, converter_module, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        converter_module.load_dotenv()
+
+
+class TestHtmlErrMessage:
+    def test_gateway_page_collapses_to_one_line(self, converter_module):
+        page = b'<html><head><title>401 Authorization Required</title></head>\n<body><center><h1>401 Authorization Required</h1></center><hr><center>openresty</center></body></html>'
+        msg = converter_module._html_err_message(page, 401)
+        assert msg == "upstream returned HTTP 401: 401 Authorization Required (gateway: openresty)"
+        assert "<html>" not in msg
+
+    def test_non_html_falls_through(self, converter_module):
+        msg = converter_module._html_err_message(b"plain gateway refusal", 502)
+        assert msg == "plain gateway refusal"
