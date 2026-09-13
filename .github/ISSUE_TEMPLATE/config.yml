@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/leonid-dalin/codebuddy2openai/security/advisories/new
+    about: Report a credential leak or a vulnerability privately. Do not open a public issue.
+  - name: Setup question
+    url: https://github.com/leonid-dalin/codebuddy2openai/blob/main/README.md
+    about: Installation, credentials and client wiring are covered in the README.
