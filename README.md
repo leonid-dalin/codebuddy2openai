@@ -23,6 +23,15 @@ pip install -r requirements.txt
 python3 converter.py
 ```
 
+Or use a launcher, which loads `.env`, picks the project virtual environment, and installs the dependencies if they are missing:
+
+```bash
+./scripts/start.sh          # Linux and macOS
+scripts\start.bat           # Windows
+```
+
+Keep it running across a reboot with `./scripts/watcher.sh`, which restarts the proxy whenever `/health` stops answering. See [scripts/README.md](scripts/README.md) for the systemd unit, the Windows Task Scheduler setup, and the environment overrides.
+
 Then point your OpenAI-compatible client at `http://127.0.0.1:8787/v1` (API base), leave the key blank unless you started the converter with `--api-key`. Note: Codex CLI is **not** supported (it dropped `wire_api = "chat"`); use ZCode, Cherry Studio, or any OpenAI-compatible client instead.
 
 ### Running the tests

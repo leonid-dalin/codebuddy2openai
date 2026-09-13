@@ -1,0 +1,20 @@
+[Unit]
+Description=WorkBuddy2OpenAI proxy watcher
+Documentation=https://github.com/leonid-dalin/codebuddy2openai/blob/main/scripts/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i/codebuddy2openai
+Environment=WORKBUDDY2OPENAI_RUNTIME_DIR=/run/workbuddy2openai
+ExecStartPre=/bin/mkdir -p /run/workbuddy2openai
+ExecStart=/bin/bash /home/%i/codebuddy2openai/scripts/watcher.sh
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/%i/codebuddy2openai/watcher.log
+StandardError=append:/home/%i/codebuddy2openai/watcher.log
+
+[Install]
+WantedBy=multi-user.target

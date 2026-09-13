@@ -38,10 +38,10 @@ A test that has never been observed failing is not evidence. When you claim a te
 ## Running the proxy
 
 ```
-./start.sh
+./scripts/start.sh
 ```
 
-The launcher loads `.env`, picks the project virtual environment, and installs the runtime dependencies if they are missing. The Windows launchers `start.bat` and `start-if-needed.bat` do the equivalent.
+The launcher loads `.env`, picks the project virtual environment, and installs the runtime dependencies if they are missing. On Windows, `scripts\start.bat` does the equivalent. Both accept the same flags as `converter.py`. See [scripts/README.md](scripts/README.md) for the restart watcher and for running the proxy at boot.
 
 Verify a change end to end rather than only through the test suite. Start the proxy and send it a real completion request:
 
