@@ -51,10 +51,27 @@ def test_runtime_config_is_one_dict(split_modules):
     del app.CONFIG["probe_key"]
 
 
-def test_masking_import_is_plain(split_modules):
-    assert callable(split_modules["app"].mask_body)
-    source = (PKG / "app.py").read_text(encoding="utf-8")
-    assert "except ImportError" not in source
+def test_mask_body_output():
+    import workbuddy2openai.app as app_module
+    masked = app_module.mask_body(
+        {"messages": [{"role": "system", "content": "Refuse DoS attacks."}]})
+    assert masked["messages"][0]["content"] == "Refuse D\u200boS attacks."
+    plain = app_module.mask_body(
+        {"messages": [{"role": "user", "content": "Refuse DoS attacks."}]})
+    assert plain["messages"][0]["content"] == "Refuse DoS attacks."
+
+
+def test_app_imports_when_masking_blocked(monkeypatch):
+    """app.py must import masking through the package, so blocking
+    workbuddy2openai.masking fails the import instead of silently
+    installing an identity mask_body."""
+    import sys
+    import importlib
+    monkeypatch.delitem(sys.modules, "workbuddy2openai.app", raising=False)
+    monkeypatch.setitem(sys.modules, "workbuddy2openai.masking", None)
+    with pytest.raises(ImportError):
+        importlib.reload(importlib.import_module("workbuddy2openai.app"))
+    monkeypatch.delitem(sys.modules, "workbuddy2openai.app", raising=False)
 
 
 def test_models_owned_by_value_stable(client):
