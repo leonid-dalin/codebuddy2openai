@@ -1,6 +1,13 @@
 # workbuddy2openai
 
-> 把 **CodeBuddy / WorkBuddy（腾讯代码助手）** 的订阅，转换成 **OpenAI 兼容 API**，让你能在任何支持 OpenAI 协议的客户端（ZCode、Cherry Studio、NextChat、LobeChat 等）里复用它
+<p align="center">
+  <a href="https://github.com/leonid-dalin/workbuddy2openai/actions/workflows/tests.yml"><img alt="tests" src="https://github.com/leonid-dalin/workbuddy2openai/actions/workflows/tests.yml/badge.svg" /></a>
+  <a href="https://www.python.org/"><img alt="python" src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue" /></a>
+  <a href="./LICENSE"><img alt="licence" src="https://img.shields.io/badge/licence-GPL--3.0--or--later-green" /></a>
+  <a href="https://github.com/HanHan666666/codebuddy2openai"><img alt="upstream" src="https://img.shields.io/badge/upstream-HanHan666666%2Fcodebuddy2openai-grey" /></a>
+</p>
+
+> 把 **CodeBuddy / WorkBuddy（腾讯代码助手）** 的订阅，转换成 **OpenAI 兼容 API**。任何支持 OpenAI 协议的客户端（ZCode、Cherry Studio、NextChat、LobeChat 等）指向本地端口即可复用现有订阅
 
 > ⚠️ **关于 Codex CLI**：新版 Codex CLI 已不再支持 `wire_api = "chat"`，只支持 `completions` 格式，因此**本工具无法直接接入 Codex CLI**，请改用下方「OpenAI 兼容客户端」方案
 
@@ -16,7 +23,7 @@
 
 - 🔄 OpenAI 兼容：`/v1/chat/completions`（流式 SSE）、`/v1/models`、`/health`
 - 🛠️ Function calling 开箱即用：后端原生支持 `tools` / `tool_calls`，agent 客户端直接跑工具循环，无需 prompt 注入或文本解析
-- 🪶 小而直接：一个包直连后端，不调 CLI、不开子进程
+- 🧩 小而直接：一个包直连后端，不调 CLI、不开子进程
 - 🔐 自动续期：读取桌面端登录文件，token 过期前自动刷新并回写
 - 🔑 API 密钥模式：WorkBuddy 国际版账号可跳过桌面端登录，无界面部署
 - 🖥️ 自动定位 macOS / Windows / Linux 上的登录文件
@@ -62,7 +69,7 @@ ZCode / Cherry Studio / 任意 OpenAI 客户端
 
 ```bash
 # 1. 克隆
-git clone https://github.com/leonid-dalin/codebuddy2openai.git
+git clone https://github.com/leonid-dalin/workbuddy2openai.git
 cd workbuddy2openai
 
 # 2. 装依赖
@@ -214,5 +221,5 @@ CI 在 Python 3.11、3.12、3.13 上跑测试套件和 pyflakes
 
 <!-- SEO keywords -->
 <sub>
-**关键词 / Keywords:** codebuddy to openai · codebuddy2openai · codebuddy openai compatible api · codebuddy api proxy · codebuddy workbuddy openai adapter · tencent codebuddy openai · codebuddy glm-5.2 api · codebuddy kimi deepseek openai · openai compatible proxy local llm gateway · codebuddy function calling · codebuddy tool use tool_calls · codebuddy zcode cherry studio · 腾讯代码助手 openai · codebuddy 转 openai · codebuddy 接入 zcode cherry studio · 本地大模型代理 openai 协议 · codebuddy 订阅 复用 · workbuddy api 转换 · codebuddy 工具调用
+关键词 / Keywords: codebuddy to openai · workbuddy2openai · codebuddy openai compatible api · codebuddy api proxy · codebuddy workbuddy openai adapter · tencent codebuddy openai · codebuddy glm-5.2 api · codebuddy kimi deepseek openai · openai compatible proxy local llm gateway · codebuddy function calling · codebuddy tool use tool_calls · codebuddy zcode cherry studio · 腾讯代码助手 openai · codebuddy 转 openai · codebuddy 接入 zcode cherry studio · 本地大模型代理 openai 协议 · codebuddy 订阅 复用 · workbuddy api 转换 · codebuddy 工具调用
 </sub>

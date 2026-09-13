@@ -15,10 +15,12 @@ If you are on a WorkBuddy international account, stop here and follow [the direc
 ## 2. Start the proxy
 
 ```bash
-git clone https://github.com/leonid-dalin/codebuddy2openai.git
+git clone https://github.com/leonid-dalin/workbuddy2openai.git
 cd workbuddy2openai
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python3 -m workbuddy2openai.converter
+python -m workbuddy2openai.converter
 ```
 
 The startup preflight prints the account it found and whether the token is live. When you see `listening on http://127.0.0.1:8787`, the proxy is up.

@@ -9,9 +9,9 @@ A local OpenAI-compatible proxy for the WorkBuddy / CodeBuddy (Tencent) subscrip
 ## Install and run
 
 ```bash
-git clone https://github.com/leonid-dalin/codebuddy2openai.git
+git clone https://github.com/leonid-dalin/workbuddy2openai.git
 cd workbuddy2openai
-python3.11 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]" -r requirements-dev.txt
 python -m workbuddy2openai.converter --help             # smoke: entry point resolves
 ```

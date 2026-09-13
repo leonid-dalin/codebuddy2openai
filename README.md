@@ -1,8 +1,20 @@
 # workbuddy2openai
 
-> Turn your **CodeBuddy / WorkBuddy (Tencent coding assistant)** subscription into a standard **OpenAI-compatible API**, so you can reuse it from any OpenAI-protocol client (ZCode, Cherry Studio, NextChat, LobeChat, Open WebUI, and others).
+<p align="center">
+  <img alt="workbuddy2openai" src="https://img.shields.io/badge/workbuddy2openai-OpenAI%20compatible%20proxy-blue" />
+</p>
 
-> ⚠️ **Codex CLI note:** newer Codex CLI dropped `wire_api = "chat"` and only supports the `completions` format, so **this tool cannot be used with Codex CLI**. Use any OpenAI-compatible client instead.
+<p align="center">
+  <a href="https://github.com/leonid-dalin/workbuddy2openai/actions/workflows/tests.yml"><img alt="tests" src="https://github.com/leonid-dalin/workbuddy2openai/actions/workflows/tests.yml/badge.svg" /></a>
+  <a href="https://www.python.org/"><img alt="python" src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue" /></a>
+  <a href="https://www.python.org/"><img alt="fastapi" src="https://img.shields.io/badge/FastAPI-2.0-teal" /></a>
+  <a href="./LICENSE"><img alt="licence" src="https://img.shields.io/badge/licence-GPL--3.0--or--later-green" /></a>
+  <a href="https://github.com/HanHan666666/codebuddy2openai"><img alt="upstream" src="https://img.shields.io/badge/upstream-HanHan666666%2Fcodebuddy2openai-grey" /></a>
+</p>
+
+> Turn your **CodeBuddy / WorkBuddy (Tencent coding assistant)** subscription into a standard **OpenAI-compatible API**. Point any OpenAI-protocol client (ZCode, Cherry Studio, NextChat, LobeChat, Open WebUI) at the local port and keep using the subscription you already pay for
+
+> ⚠️ **Codex CLI:** recent versions dropped `wire_api = "chat"`, so they cannot talk to this proxy. Use any client that speaks the OpenAI chat protocol
 
 [English](README.md) · [中文文档](README.zh-CN.md)
 
@@ -10,7 +22,7 @@
 
 - 🔄 OpenAI-compatible: `/v1/chat/completions` with streaming SSE, plus `/v1/models` and `/health`
 - 🛠️ Function calling that just works: the backend speaks native `tools` and `tool_calls`, so agent clients run tool loops with no prompt injection and no text parsing
-- 🪶 Small and direct: one package calling the backend directly, no bundled CLI, no subprocess
+- 🧩 Small and direct: one package calling the backend directly, no bundled CLI, no subprocess
 - 🔐 Signs itself in: reads the desktop client's login file, refreshes the token before it expires, and writes the fresh session back
 - 🔑 Direct-key mode for WorkBuddy international accounts, no desktop session, runs headless
 - 🖥️ Finds the auth file on macOS, Windows and Linux
@@ -20,10 +32,12 @@
 ### 🚀 Quick Start
 
 ```bash
-git clone https://github.com/leonid-dalin/codebuddy2openai.git
+git clone https://github.com/leonid-dalin/workbuddy2openai.git
 cd workbuddy2openai
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python3 -m workbuddy2openai.converter
+python -m workbuddy2openai.converter
 ```
 
 Sign in on the CodeBuddy / WorkBuddy desktop client first; the proxy reads that login. Startup runs a preflight that prints the account and token state.
@@ -154,5 +168,5 @@ Licence: [GPL-3.0-or-later](./LICENSE)
 
 <!-- SEO keywords -->
 <sub>
-**Keywords / 关键词:** codebuddy to openai · codebuddy2openai · codebuddy openai compatible api · codebuddy api proxy · codebuddy workbuddy openai adapter · tencent codebuddy openai · codebuddy glm-5.2 api · codebuddy kimi deepseek openai · openai compatible proxy local llm gateway · codebuddy function calling · codebuddy tool use tool_calls · codebuddy zcode cherry studio · 腾讯代码助手 openai · codebuddy 转 openai · codebuddy 接入 zcode cherry studio · 本地大模型代理 openai 协议 · codebuddy 订阅 复用 · workbuddy api 转换 · codebuddy 工具调用
+Keywords / 关键词: codebuddy to openai · workbuddy2openai · codebuddy openai compatible api · codebuddy api proxy · codebuddy workbuddy openai adapter · tencent codebuddy openai · codebuddy glm-5.2 api · codebuddy kimi deepseek openai · openai compatible proxy local llm gateway · codebuddy function calling · codebuddy tool use tool_calls · codebuddy zcode cherry studio · 腾讯代码助手 openai · codebuddy 转 openai · codebuddy 接入 zcode cherry studio · 本地大模型代理 openai 协议 · codebuddy 订阅 复用 · workbuddy api 转换 · codebuddy 工具调用
 </sub>
