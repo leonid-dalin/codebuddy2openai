@@ -453,6 +453,40 @@ def _log_finish(model_name: str, t0: float, result: dict, rid: str = ""):
     _log(f"{prefix}── RESPONSE BODY ──\n{json.dumps(result, ensure_ascii=False, indent=2)}")
 
 
+def _parse_sse_data(data: str | bytes) -> dict | None:
+    """Parse one SSE data payload; None for [DONE], comments and undecodable JSON.
+
+    Termination is the caller's concern: [DONE] returns None rather than
+    stopping the iteration, so the byte-forwarding relay can keep reading.
+    """
+    if isinstance(data, bytes):
+        data = data.strip()
+        if data == b"[DONE]":
+            return None
+        try:
+            data = data.decode("utf-8", "replace")
+        except Exception:
+            return None
+    else:
+        data = data.strip()
+        if data == "[DONE]":
+            return None
+    try:
+        return json.loads(data)
+    except Exception:
+        return None
+
+
+async def sse_events(response: httpx.Response):
+    async for line in response.aiter_lines():
+        line = line.strip()
+        if not line.startswith("data:"):
+            continue
+        event = _parse_sse_data(line[5:])
+        if event is not None:
+            yield event
+
+
 async def _collect_stream(response: httpx.Response) -> dict:
     """消费后端的 OpenAI SSE 流，聚合成单个非流式 chat.completion 对象。
 
@@ -465,17 +499,7 @@ async def _collect_stream(response: httpx.Response) -> dict:
     finish_reason: str | None = None
     usage: dict | None = None
 
-    async for line in response.aiter_lines():
-        line = line.strip()
-        if not line or not line.startswith("data:"):
-            continue
-        data = line[5:].strip()
-        if data == "[DONE]":
-            break
-        try:
-            chunk = json.loads(data)
-        except json.JSONDecodeError:
-            continue
+    async for chunk in sse_events(response):
         model = chunk.get("model") or model
         if chunk.get("usage"):
             usage = chunk["usage"]
@@ -633,12 +657,8 @@ async def _stream_upstream(url: str, headers: dict, body: dict,
             line = line.strip()
             if not line.startswith(b"data:"):
                 continue
-            data = line[5:].strip()
-            if data == b"[DONE]":
-                continue
-            try:
-                obj = json.loads(data)
-            except Exception:
+            obj = _parse_sse_data(line[5:])
+            if obj is None:
                 continue
             if obj.get("usage"):
                 usage.update(obj["usage"])
@@ -651,7 +671,7 @@ async def _stream_upstream(url: str, headers: dict, body: dict,
                         tool_names.append(nm)
             # 内容审核拦截常以 content-filter 或特殊中文文案返回
             try:
-                text_repr = data.decode("utf-8", "replace")
+                text_repr = line.decode("utf-8", "replace")
             except Exception:
                 text_repr = ""
             if "content-filter" in text_repr or "敏感" in text_repr or "审核" in text_repr:

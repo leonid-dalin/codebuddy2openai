@@ -435,6 +435,44 @@ class TestErrCode:
         assert converter_module._err_code(detail) == expected
 
 
+class TestRelayRawForwarding:
+    def test_relay_forwards_raw_bytes_verbatim(
+        self, direct_key_client, converter_module, upstream_ok
+    ):
+        chunk = sse_chunk("X") + sse_finish()
+        upstream_ok([chunk])
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": True,
+        })
+        assert response.text.count("data: ") >= 2
+        assert '"content": "X"' in response.text
+
+    def test_relay_detects_content_filter_marker(
+        self, direct_key_client, converter_module, upstream_ok, tmp_path
+    ):
+        log_file = tmp_path / "conv.log"
+        converter_module.CONFIG["log_path"] = str(log_file)
+        payload = {
+            "id": "cmb-f", "model": "glm-5.2", "object": "chat.completion.chunk",
+            "created": 1700000000,
+            "choices": [{"index": 0, "delta": {"content": "x"}, "finish_reason": "content-filter"}],
+            "usage": None,
+        }
+        upstream_ok([f"data: {json.dumps(payload)}\n\n".encode(), b"data: [DONE]\n\n"])
+        response = direct_key_client.post("/v1/chat/completions", json={
+            "model": "glm-5.2",
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": True,
+        })
+        assert response.status_code == 200
+        text = log_file.read_text(encoding="utf-8")
+        assert "RESPONSE RAW SSE" in text
+        assert '"content": "x"' in text
+        converter_module.CONFIG["log_path"] = None
+
+
 class TestChatCompletionsErrors:
     def test_missing_messages_rejected(self, direct_key_client):
         response = direct_key_client.post("/v1/chat/completions", json={"model": "glm-5.2"})
