@@ -26,39 +26,18 @@ from __future__ import annotations
 import argparse
 import sys
 
-import httpx
 import uvicorn
 
 from workbuddy2openai.app import (
     CONFIG,
-    _check_auth,
-    _cred,
     _env_first,
+    _log,
     app,
-    chat_completions,
-    complete_with_fallback,
-    health,
-    list_models,
     preflight,
-    route_for_request,
 )
 from workbuddy2openai.credentials import (
     CredentialManager,
-    auth_dirs,
     find_auth_file,
-)
-from workbuddy2openai.upstream import (
-    BACKEND,
-    BACKEND_BY_DOMAIN,
-    CN_MODELS,
-    DEFAULT_MODELS,
-    DIRECT_KEY_BACKEND,
-    INTL_MODELS,
-    PASSTHROUGH_BODY_KEYS,
-    TOKEN_PATH_RETRY_CODES,
-    USER_AGENT,
-    _err_code,
-    backend_for_domain,
 )
 
 
@@ -102,7 +81,6 @@ def main():
         sys.stderr.write("   mask        : enabled (zero-width handling in system messages)\n")
     sys.stderr.write("press Ctrl+C to exit.\n\n")
 
-    from app import _log
     _log("==== converter started ====")
 
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")

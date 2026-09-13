@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -13,9 +14,28 @@ if str(SRC_ROOT) not in sys.path:
 
 @pytest.fixture(scope="session")
 def converter_module():
-    """The converter facade, imported once per session without running main()."""
-    import workbuddy2openai.converter as converter
-    return converter
+    """A test facade over the canonical modules: CONFIG and app live in
+    workbuddy2openai.app, model catalogs and helpers in upstream, auth in
+    credentials. Tests read them from the module that owns each symbol."""
+    import httpx
+
+    import workbuddy2openai.app as app_module
+    import workbuddy2openai.credentials as credentials
+    import workbuddy2openai.upstream as upstream
+
+    return SimpleNamespace(
+        CONFIG=app_module.CONFIG,
+        app=app_module.app,
+        _check_auth=app_module._check_auth,
+        _cred=app_module._cred,
+        CredentialManager=credentials.CredentialManager,
+        backend_for_domain=credentials.backend_for_domain,
+        CN_MODELS=upstream.CN_MODELS,
+        INTL_MODELS=upstream.INTL_MODELS,
+        DEFAULT_MODELS=upstream.DEFAULT_MODELS,
+        _err_code=upstream._err_code,
+        httpx=httpx,
+    )
 
 
 @pytest.fixture(scope="session")
