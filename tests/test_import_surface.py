@@ -1,20 +1,20 @@
 """The file split must be invisible to importers of converter.py."""
 
 import ast
-import sys
 from pathlib import Path
 
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
+PKG = REPO / "src" / "workbuddy2openai"
 
 
 @pytest.fixture(scope="module")
 def split_modules():
-    import app as app_module
-    import converter as conv
-    import credentials as creds
-    import upstream as upstream
+    import workbuddy2openai.app as app_module
+    import workbuddy2openai.converter as conv
+    import workbuddy2openai.credentials as creds
+    import workbuddy2openai.upstream as upstream
     return {"conv": conv, "creds": creds, "upstream": upstream, "app": app_module}
 
 
@@ -41,7 +41,7 @@ def test_converter_entry_point_resolves(split_modules):
 
 def test_split_modules_do_not_import_app_layer():
     for name in ("credentials", "upstream"):
-        source = (REPO / f"{name}.py").read_text(encoding="utf-8")
+        source = (PKG / f"{name}.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -59,8 +59,8 @@ def test_runtime_config_is_one_dict(split_modules):
     del app.CONFIG["probe_key"]
 
 
-def test_desensitize_fallback_present(split_modules):
-    assert callable(split_modules["app"].desensitize_body)
+def test_masking_fallback_present(split_modules):
+    assert callable(split_modules["app"].mask_body)
 
 
 def test_models_owned_by_value_stable(client):

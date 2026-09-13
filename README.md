@@ -9,7 +9,7 @@
 ### ✨ Features
 
 - 🔄 **OpenAI-compatible**: standard `/v1/chat/completions` (streaming SSE), `/v1/models`, `/health`.
-- 🪶 **Single-file & minimal**: core is one `converter.py`.
+- 🪶 **Single-package & minimal**: the core is one small package, `workbuddy2openai`.
 - 🔐 **Zero-auth hassle**: calls your locally-logged-in `codebuddy` CLI; reuses the desktop login session.
 - 🖥️ **Cross-platform**: auto-locates CLI & auth on macOS / Windows / Linux.
 - 🛡️ **Safe**: listens on `127.0.0.1` only; disables all built-in CLI tools for pure chat.
@@ -20,7 +20,7 @@
 git clone https://github.com/HanHan666666/codebuddy2openai.git
 cd codebuddy2openai
 pip install -r requirements.txt
-python3 converter.py
+python3 -m workbuddy2openai.converter
 ```
 
 Or use a launcher, which loads `.env`, picks the project virtual environment, and installs the dependencies if they are missing:
@@ -46,7 +46,7 @@ pytest
 WorkBuddy international accounts (Keycloak realm on `www.workbuddy.ai`) get 401s from the desktop-token path: the token shape does not match the backend the converter calls, and refresh fails with `invalid_grant`. If that is your situation, skip the desktop session entirely and use a **CK_\* API key** instead (generate one at [codebuddy.ai/profile/keys](https://www.codebuddy.ai/profile/keys); the CLI documents the same key as `CODEBUDDY_API_KEY`).
 
 ```bash
-python3 converter.py --direct-key ck_yourkeyhere
+python3 -m workbuddy2openai.converter --direct-key ck_yourkeyhere
 # or: export CODEBUDDY_DIRECT_KEY=ck_yourkeyhere
 ```
 

@@ -29,5 +29,5 @@ if not defined PY (
 "%PY%" -c "import httpx, fastapi, uvicorn" 2>nul
 if errorlevel 1 "%PY%" -m pip install -q -r requirements.txt
 
-"%PY%" converter.py %*
+"%PY%" -m workbuddy2openai.converter %*
 endlocal

@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 import uvicorn
 
-from credentials import (
+from workbuddy2openai.credentials import (
     BACKEND,
     USER_AGENT,
     CredentialManager,
@@ -28,7 +28,7 @@ from credentials import (
     backend_for_domain,
     find_auth_file,
 )
-from upstream import (
+from workbuddy2openai.upstream import (
     CN_MODELS,
     DEFAULT_MODELS,
     DIRECT_KEY_BACKEND,
@@ -45,14 +45,14 @@ from upstream import (
 )
 
 try:
-    from desensitize import desensitize_body
+    from workbuddy2openai.masking import mask_body
 except ImportError:
-    def desensitize_body(body, roles=("system",)):
+    def mask_body(body, roles=("system",)):
         return body
 
 app = FastAPI(title="workbuddy2openai", version="2.0")
 CONFIG: dict = {"api_key": "", "cred": None, "log_path": None,
-                "desensitize": False,
+                "mask": False,
                 "direct_key": None,
                 "log_body": False}
 
@@ -72,7 +72,7 @@ def _log(msg: str):
         pass
 
 
-import upstream as _upstream_module
+from workbuddy2openai import upstream as _upstream_module
 _upstream_module.set_log_sink(_log)
 
 
@@ -218,8 +218,8 @@ async def chat_completions(request: Request,
     if "stream_options" not in body:
         body["stream_options"] = {"include_usage": True}
 
-    if CONFIG.get("desensitize"):
-        body = desensitize_body(body, roles=("system",))
+    if CONFIG.get("mask"):
+        body = mask_body(body, roles=("system",))
 
     model_name = payload.get("model", "auto")
     tool_names = [t.get("function", {}).get("name") for t in (payload.get("tools") or [])

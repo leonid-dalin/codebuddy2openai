@@ -1,6 +1,6 @@
 # Launcher scripts
 
-Scripts that start the proxy and keep it running. The Python package itself needs none of them: `python converter.py` works on its own. These add `.env` loading, virtual environment selection, and automatic restart.
+Scripts that start the proxy and keep it running. The Python package itself needs none of them: `python -m workbuddy2openai.converter` works on its own. These add `.env` loading, virtual environment selection, and automatic restart.
 
 ## Files
 
@@ -29,7 +29,7 @@ scripts\start.bat --port 9000 --log converter.log
 
 Both select the project virtual environment when one exists, in this order: `.venv`, then `venv`. On Windows the lookup covers `Scripts\python.exe`, and on Linux and macOS `bin/python`. When no environment is found the script warns and uses the system interpreter. It then checks that `httpx`, `fastapi` and `uvicorn` import, and installs `requirements.txt` if they do not.
 
-Any argument is passed through to `converter.py`, so the flags in the main README work unchanged.
+Any argument is passed through to the converter, so the flags in the main README work unchanged.
 
 `.env` is loaded with `set -a`, so every variable in the file reaches the process environment. No secret is placed on the command line; the `.env` file is the safer channel for keys. The proxy binds to `127.0.0.1:8787` by default, and without a key in `.env` or `--api-key` it accepts any client on that port.
 
@@ -37,7 +37,7 @@ Any argument is passed through to `converter.py`, so the flags in the main READM
 
 ## Keeping it running
 
-`watcher.sh` checks `/health` every 60 seconds. When the check fails it stops the process holding the port, starts the proxy again, and writes the outcome to `watcher.log`. It only kills a process whose command line contains `converter.py`, so an unrelated Python service on the same host is left alone.
+`watcher.sh` checks `/health` every 60 seconds. When the check fails it stops the process holding the port, starts the proxy again, and writes the outcome to `watcher.log`. It only kills a process whose command line contains `workbuddy2openai`, so an unrelated Python service on the same host is left alone.
 
 A lock file at `watcher.pid` keeps one watcher active. The lock records a pid, and a second invocation exits when that pid is still a running `watcher.sh`. A stale lock is discarded, so a watcher killed with `SIGKILL` does not block the next one.
 

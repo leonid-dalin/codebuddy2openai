@@ -16,9 +16,9 @@ Cross-platform: locates the auth directory on macOS / Windows / Linux.
 Dependencies: fastapi + uvicorn + httpx (pip install fastapi "uvicorn[standard]" httpx).
 
 Usage:
-  python3 converter.py
-  python3 converter.py --port 9000
-  python3 converter.py --api-key mysecret
+  python3 -m workbuddy2openai.converter
+  python3 -m workbuddy2openai.converter --port 9000
+  python3 -m workbuddy2openai.converter --api-key mysecret
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ import sys
 import httpx
 import uvicorn
 
-from app import (
+from workbuddy2openai.app import (
     CONFIG,
     _check_auth,
     _cred,
@@ -42,12 +42,12 @@ from app import (
     preflight,
     route_for_request,
 )
-from credentials import (
+from workbuddy2openai.credentials import (
     CredentialManager,
     auth_dirs,
     find_auth_file,
 )
-from upstream import (
+from workbuddy2openai.upstream import (
     BACKEND,
     BACKEND_BY_DOMAIN,
     CN_MODELS,
@@ -70,7 +70,7 @@ def main():
                     help="require clients to present this API key (off by default)")
     ap.add_argument("--log", default=None, metavar="PATH",
                     help="write a log to this path; no logging when omitted")
-    ap.add_argument("--desensitize", action="store_true",
+    ap.add_argument("--mask", action="store_true",
                     help="insert zero-width spaces into compliance-template terms in system messages to avoid upstream content-filter false positives (off by default)")
     ap.add_argument("--log-body", action="store_true",
                     help="log full request/response bodies and raw SSE (needs --log; off by default)")
@@ -80,7 +80,7 @@ def main():
     args = ap.parse_args()
 
     CONFIG["api_key"] = args.api_key
-    CONFIG["desensitize"] = args.desensitize
+    CONFIG["mask"] = args.mask
     CONFIG["direct_key"] = (args.direct_key or "").strip() or None
     CONFIG["log_path"] = args.log if args.log else (_env_first("WORKBUDDY2OPENAI_LOG", "CODEBUDDY2OPENAI_LOG") or None)
     CONFIG["log_body"] = args.log_body
@@ -98,8 +98,8 @@ def main():
         sys.stderr.write("   auth: enabled (API key set)\n")
     if CONFIG["log_path"]:
         sys.stderr.write(f"   log        : {CONFIG['log_path']}\n")
-    if args.desensitize:
-        sys.stderr.write("   desensitize: enabled (zero-width handling in system messages)\n")
+    if args.mask:
+        sys.stderr.write("   mask        : enabled (zero-width handling in system messages)\n")
     sys.stderr.write("press Ctrl+C to exit.\n\n")
 
     from app import _log

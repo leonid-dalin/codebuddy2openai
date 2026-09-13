@@ -16,7 +16,7 @@ import time
 import httpx
 from fastapi import HTTPException
 
-from credentials import (
+from workbuddy2openai.credentials import (
     BACKEND,
     BACKEND_BY_DOMAIN,
     USER_AGENT,
