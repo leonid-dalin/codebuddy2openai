@@ -267,7 +267,7 @@ async def _stream_upstream(url: str, headers: dict, body: dict,
         yield _err_event(str(e).encode(), 502)
 
     elapsed = time.time() - t0 if t0 else 0
-    tag = " ⚠️内容审核拦截" if (saw_filter or finish_reason == "content-filter") else ""
+    tag = " [content-filter]" if (saw_filter or finish_reason == "content-filter") else ""
     _log(f"{prefix}◀ RESPONSE {model_name} | {elapsed:.1f}s | stream finish={finish_reason}{tag}"
          + (f" | tool_calls={tool_names}" if tool_names else "")
          + f" | tokens={usage.get('total_tokens', '?')}")

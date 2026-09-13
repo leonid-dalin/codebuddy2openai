@@ -50,7 +50,7 @@ except ImportError:
     def desensitize_body(body, roles=("system",)):
         return body
 
-app = FastAPI(title="codebuddy2openai", version="2.0")
+app = FastAPI(title="workbuddy2openai", version="2.0")
 CONFIG: dict = {"api_key": "", "cred": None, "log_path": None,
                 "desensitize": False,
                 "direct_key": None,
@@ -101,7 +101,7 @@ def _cred() -> CredentialManager:
     if CONFIG.get("direct_key"):
         raise HTTPException(status_code=500, detail={"error": {"message": "internal: _cred called in direct-key mode", "type": "auth_error"}})
     if CONFIG["cred"] is None:
-        raise HTTPException(status_code=503, detail={"error": {"message": "未找到登录凭据，请先在桌面端登录 CodeBuddy/WorkBuddy", "type": "auth_error"}})
+        raise HTTPException(status_code=503, detail={"error": {"message": "no login credentials found; sign in on the WorkBuddy desktop client first", "type": "auth_error"}})
     return CONFIG["cred"]
 
 
@@ -161,7 +161,7 @@ def _log_finish(model_name: str, t0: float, result: dict, rid: str = ""):
     usage = result.get("usage") or {}
     tag = ""
     if finish == "content-filter":
-        tag = " ⚠️内容审核拦截"
+        tag = " [content-filter]"
     tc_names = [t.get("function", {}).get("name") for t in tcs]
     _log(f"{prefix}◀ RESPONSE {model_name} | {elapsed:.1f}s | finish={finish}{tag}"
          + (f" | tool_calls={tc_names}" if tc_names else "")
@@ -174,7 +174,7 @@ def _log_finish(model_name: str, t0: float, result: dict, rid: str = ""):
 def health():
     cred = CONFIG["cred"]
     info: dict = {"status": "ok", "platform": sys.platform, "python": sys.version.split()[0],
-                  "auth_file": str(find_auth_file() or "(未找到)"), "mode": "direct-proxy (native function calling)"}
+                  "auth_file": str(find_auth_file() or "(not found)"), "mode": "direct-proxy (native function calling)"}
     if cred is not None:
         try:
             info["credential"] = cred.summary()
@@ -284,25 +284,25 @@ async def complete_with_fallback(url: str, headers: dict, body: dict,
 
 def preflight() -> bool:
     af = find_auth_file()
-    sys.stderr.write("==== 预检 ====\n")
-    sys.stderr.write(f"平台      : {sys.platform}\n")
-    sys.stderr.write(f"Python    : {sys.version.split()[0]}\n")
-    sys.stderr.write(f"后端      : {BACKEND} (直连，原生 function calling)\n")
-    sys.stderr.write(f"登录文件  : {af or '(未找到)'}\n")
+    sys.stderr.write("==== preflight ====\n")
+    sys.stderr.write(f"platform   : {sys.platform}\n")
+    sys.stderr.write(f"python     : {sys.version.split()[0]}\n")
+    sys.stderr.write(f"backend    : {BACKEND} (direct, native function calling)\n")
+    sys.stderr.write(f"login file : {af or '(not found)'}\n")
     if auth_dirs():
-        sys.stderr.write(f"已查目录  : {', '.join(str(d) for d in auth_dirs())}\n")
+        sys.stderr.write(f"searched   : {', '.join(str(d) for d in auth_dirs())}\n")
     ok = True
     if af is None:
-        sys.stderr.write("\n[警告] 未找到登录文件。请在桌面端完成登录（CodeBuddy/WorkBuddy）。\n")
+        sys.stderr.write("\n[warning] login file not found. Complete the sign-in on the WorkBuddy desktop client.\n")
         ok = False
     else:
         try:
             cm = CredentialManager(af)
             info = cm.summary()
-            sys.stderr.write(f"账号      : {info.get('nickname')} / {info.get('enterpriseName')}\n")
-            sys.stderr.write(f"token过期 : {'是(将自动刷新)' if info['token_expired'] else '否'}\n")
+            sys.stderr.write(f"account    : {info.get('nickname')} / {info.get('enterpriseName')}\n")
+            sys.stderr.write(f"token expiry: {'expired (will refresh)' if info['token_expired'] else 'valid'}\n")
         except Exception as e:
-            sys.stderr.write(f"[警告] 读取凭据失败：{e}\n")
+            sys.stderr.write(f"[warning] failed to read credentials: {e}\n")
             ok = False
     sys.stderr.write("================\n")
     return ok

@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 """
-workbuddy2openai — 把 CodeBuddy / WorkBuddy 的订阅暴露成标准 OpenAI 兼容 API。
+workbuddy2openai exposes a locally logged-in WorkBuddy subscription as a standard OpenAI-compatible API.
 
-原理（直连后端，原生 function calling）：
-  - 读取本机已登录的 CodeBuddy 桌面端凭据（auth 文件里的 token / uid / enterpriseId）。
-  - 直接转发到 CodeBuddy 后端 `https://copilot.tencent.com/v2/chat/completions`。
-    该后端本身就是标准 OpenAI chat/completions 协议（含原生 tools / tool_calls / SSE 流式）。
-  - 转换器只做两件事：①注入鉴权 header（Authorization / X-User-Id 等）
-    ②在本地 /v1/* 与后端 /v2/* 之间做路径映射与透传。
-  - token 过期时自动调 `/v2/plugin/auth/token/refresh` 刷新，并回写 auth 文件。
+How it works (direct backend, native function calling):
+  - reads the WorkBuddy desktop credentials stored on this machine
+    (token / uid / enterpriseId from the auth file).
+  - forwards straight to the upstream backend, which already speaks the
+    standard OpenAI chat protocol (native tools / tool_calls / SSE streaming).
+  - the converter does two things: injects the auth headers, and maps
+    local /v1/* paths onto the backend /v2/* paths.
+  - refreshes the token automatically before expiry via
+    /v2/plugin/auth/token/refresh and writes the auth file back.
 
-跨平台：自动定位 auth 目录（macOS / Windows / Linux）。
-依赖：fastapi + uvicorn + httpx（pip install fastapi "uvicorn[standard]" httpx）。
+Cross-platform: locates the auth directory on macOS / Windows / Linux.
+Dependencies: fastapi + uvicorn + httpx (pip install fastapi "uvicorn[standard]" httpx).
 
-用法：
-  python3 converter.py                       # 默认 127.0.0.1:8787
+Usage:
+  python3 converter.py
   python3 converter.py --port 9000
-  python3 converter.py --api-key mysecret    # 启用客户端鉴权
+  python3 converter.py --api-key mysecret
 """
 
 from __future__ import annotations
@@ -61,22 +63,20 @@ from upstream import (
 
 
 def main():
-    ap = argparse.ArgumentParser(description="CodeBuddy -> OpenAI 兼容转换器（直连后端）")
+    ap = argparse.ArgumentParser(description="WorkBuddy to OpenAI-compatible converter (direct backend)")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8787)
     ap.add_argument("--api-key", default=_env_first("WORKBUDDY2OPENAI_KEY", "CODEBUDDY2OPENAI_KEY"),
-                    help="可选：要求客户端携带的 API key（默认不校验）")
+                    help="require clients to present this API key (off by default)")
     ap.add_argument("--log", default=None, metavar="PATH",
-                    help="开启日志并写到该文件（如 --log converter.log 或 --log /tmp/cb.log）。"
-                         "不传则不记日志。")
+                    help="write a log to this path; no logging when omitted")
     ap.add_argument("--desensitize", action="store_true",
-                    help="启用脱敏：对 system 消息里的合规模板敏感词（DoS/exploit/credential 等）"
-                         "插入零宽空格，缓解被后端内容审核误拦。默认关闭。")
+                    help="insert zero-width spaces into compliance-template terms in system messages to avoid upstream content-filter false positives (off by default)")
     ap.add_argument("--log-body", action="store_true",
-                    help="记录完整请求/响应体与原始 SSE 到日志（--log 开启时生效）。默认关闭。")
+                    help="log full request/response bodies and raw SSE (needs --log; off by default)")
     ap.add_argument("--direct-key", default=_env_first("WORKBUDDY_DIRECT_KEY", "CODEBUDDY_DIRECT_KEY"),
-                    help="CK_* CodeBuddy API key: bypass desktop session, call the international backend directly")
-    ap.add_argument("--skip-check", action="store_true", help="跳过启动预检")
+                    help="CK_* WorkBuddy API key: bypass the desktop session and call the international backend directly")
+    ap.add_argument("--skip-check", action="store_true", help="skip the startup preflight")
     args = ap.parse_args()
 
     CONFIG["api_key"] = args.api_key
@@ -90,20 +90,20 @@ def main():
     if not args.skip_check and not CONFIG["direct_key"]:
         preflight()
 
-    sys.stderr.write(f"\n✅ 监听 http://{args.host}:{args.port}（直连后端，原生 function calling）\n")
+    sys.stderr.write(f"\nlistening on http://{args.host}:{args.port} (direct backend, native function calling)\n")
     sys.stderr.write("   GET  /v1/models\n")
-    sys.stderr.write("   POST /v1/chat/completions   (原生 tools/tool_calls，支持流式)\n")
+    sys.stderr.write("   POST /v1/chat/completions   (native tools/tool_calls, streaming supported)\n")
     sys.stderr.write("   GET  /health\n")
     if args.api_key:
-        sys.stderr.write("   鉴权已启用（API key 已设置）\n")
+        sys.stderr.write("   auth: enabled (API key set)\n")
     if CONFIG["log_path"]:
-        sys.stderr.write(f"   日志      : {CONFIG['log_path']}\n")
+        sys.stderr.write(f"   log        : {CONFIG['log_path']}\n")
     if args.desensitize:
-        sys.stderr.write("   脱敏      : 已启用（system 合规词零宽处理）\n")
-    sys.stderr.write("按 Ctrl+C 退出。\n\n")
+        sys.stderr.write("   desensitize: enabled (zero-width handling in system messages)\n")
+    sys.stderr.write("press Ctrl+C to exit.\n\n")
 
     from app import _log
-    _log("==== converter 启动 ====")
+    _log("==== converter started ====")
 
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 

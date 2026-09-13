@@ -61,3 +61,18 @@ def test_runtime_config_is_one_dict(split_modules):
 
 def test_desensitize_fallback_present(split_modules):
     assert callable(split_modules["app"].desensitize_body)
+
+
+def test_models_owned_by_value_stable(client):
+    response = client.get("/v1/models")
+    assert {m["owned_by"] for m in response.json()["data"]} == {"codebuddy"}
+
+
+def test_env_var_precedence_order(monkeypatch, split_modules):
+    monkeypatch.setenv("CODEBUDDY2OPENAI_KEY", "old-name")
+    monkeypatch.delenv("WORKBUDDY2OPENAI_KEY", raising=False)
+    assert split_modules["app"]._env_first("WORKBUDDY2OPENAI_KEY", "CODEBUDDY2OPENAI_KEY") == "old-name"
+
+
+def test_user_agent_renamed(split_modules):
+    assert split_modules["upstream"].USER_AGENT == "workbuddy2openai/2.0"

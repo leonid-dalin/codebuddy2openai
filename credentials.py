@@ -18,7 +18,7 @@ import httpx
 
 BACKEND = "https://copilot.tencent.com"
 DEFAULT_DOMAIN = "www.codebuddy.cn"
-USER_AGENT = "codebuddy2openai/2.0"
+USER_AGENT = "workbuddy2openai/2.0"
 
 BACKEND_BY_DOMAIN = {
     "www.workbuddy.ai": "https://www.workbuddy.ai",
