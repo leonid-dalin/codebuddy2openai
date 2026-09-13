@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 import uvicorn
 
-from credentials import (
+from workbuddy2openai.credentials import (
     BACKEND,
     USER_AGENT,
     CredentialManager,
@@ -28,7 +28,7 @@ from credentials import (
     backend_for_domain,
     find_auth_file,
 )
-from upstream import (
+from workbuddy2openai.upstream import (
     CN_MODELS,
     DEFAULT_MODELS,
     DIRECT_KEY_BACKEND,
@@ -45,7 +45,7 @@ from upstream import (
 )
 
 try:
-    from masking import mask_body
+    from workbuddy2openai.masking import mask_body
 except ImportError:
     def mask_body(body, roles=("system",)):
         return body
@@ -72,7 +72,7 @@ def _log(msg: str):
         pass
 
 
-import upstream as _upstream_module
+from workbuddy2openai import upstream as _upstream_module
 _upstream_module.set_log_sink(_log)
 
 

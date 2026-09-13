@@ -68,7 +68,7 @@ cd codebuddy2openai
 pip install -r requirements.txt
 
 # 3. 启动（确保 CodeBuddy 桌面端已登录）
-python3 converter.py
+python3 -m workbuddy2openai.converter
 # 看到「✅ 监听 http://127.0.0.1:8787」即成功
 ```
 
@@ -79,7 +79,7 @@ python3 converter.py
 WorkBuddy 国际版账号（`www.workbuddy.ai` 的 Keycloak 域）走桌面端令牌会 401：令牌格式与转换器调用的后端不匹配，刷新也会报 `invalid_grant`。如果你的账号是这种情况，可以完全跳过桌面端登录，改用 **CK_\* API 密钥**（在 [codebuddy.ai/profile/keys](https://www.codebuddy.ai/profile/keys) 生成，即 CLI 文档里的 `CODEBUDDY_API_KEY`）：
 
 ```bash
-python3 converter.py --direct-key ck_你的密钥
+python3 -m workbuddy2openai.converter --direct-key ck_你的密钥
 # 或：export CODEBUDDY_DIRECT_KEY=ck_你的密钥
 ```
 
@@ -113,7 +113,7 @@ python3 converter.py --direct-key ck_你的密钥
 
 通用接入步骤（以这类客户端为例）：
 
-1. 保持转换器运行：`python3 converter.py`
+1. 保持转换器运行：`python3 -m workbuddy2openai.converter`
 2. 在客户端的「自定义模型 / OpenAI 兼容」设置里：
    - **API Base / 接口地址**：`http://127.0.0.1:8787/v1`
    - **API Key**：留空（转换器默认不校验）；若启动时用了 `--api-key`，则填同一个
@@ -163,8 +163,12 @@ curl -N http://127.0.0.1:8787/v1/chat/completions \
 
 ```
 codebuddy2openai/
-├── converter.py                     # 转换器主程序（单文件）
-├── desensitize.py                   # 脱敏模块（可选，--desensitize 启用）
+├── src/workbuddy2openai/            # 转换器主程序（包）
+│   ├── converter.py                 # 入口 facade（python -m workbuddy2openai.converter）
+│   ├── app.py                       # FastAPI 端点与配置
+│   ├── credentials.py               # 凭据发现与刷新
+│   ├── upstream.py                  # SSE 解析与聚合
+│   └── masking.py                   # 脱敏模块（可选，--mask 启用）
 ├── README.md
 └── LICENSE
 ```
@@ -176,7 +180,7 @@ codebuddy2openai/
 | `--direct-key <ck_...>` | **API 密钥模式**：跳过桌面端登录，直接用 CK_\* 密钥调用国际版后端。适合 WorkBuddy 国际版账号（桌面端令牌会 401）以及无界面部署。详见下文「API 密钥模式」。 |
 
 ```
-python3 converter.py [--host HOST] [--port PORT] [--api-key KEY] [--direct-key CK_KEY] [--log PATH] [--desensitize] [--skip-check]
+python3 -m workbuddy2openai.converter [--host HOST] [--port PORT] [--api-key KEY] [--direct-key CK_KEY] [--log PATH] [--desensitize] [--skip-check]
 ```
 
 | 参数 | 默认 | 说明 |
@@ -186,14 +190,14 @@ python3 converter.py [--host HOST] [--port PORT] [--api-key KEY] [--direct-key C
 | `--api-key` | 无 | 启用鉴权；客户端需带同样 key（也可用环境变量 `CODEBUDDY2OPENAI_KEY`）|
 | `--direct-key` | 无 | CK_\* 密钥（或环境变量 `CODEBUDDY_DIRECT_KEY`）；设置后进入 API 密钥模式，详见下文 |
 | `--log` | 无 | **开启日志并写到该文件**（如 `--log converter.log`）。不传则不记。也可用环境变量 `CODEBUDDY2OPENAI_LOG`。|
-| `--desensitize` | 关 | 启用脱敏：对 system 消息里的合规声明敏感词（DoS/exploit/credential/C2 等）插入零宽空格，缓解被后端内容审核误拦（见下方 FAQ）。|
+| `--mask` | 关 | 启用脱敏：对 system 消息里的合规声明敏感词（DoS/exploit/credential/C2 等）插入零宽空格，缓解被后端内容审核误拦（见下方 FAQ）。|
 | `--skip-check` | 否 | 跳过启动预检 |
 
 示例：
 ```bash
-python3 converter.py --log converter.log          # 记日志到当前目录 converter.log
-python3 converter.py --log /tmp/cb.log            # 记到指定路径
-python3 converter.py                              # 不记日志
+python3 -m workbuddy2openai.converter --log converter.log          # 记日志到当前目录 converter.log
+python3 -m workbuddy2openai.converter --log /tmp/cb.log            # 记到指定路径
+python3 -m workbuddy2openai.converter                              # 不记日志
 ```
 
 每条日志记录：模型、是否流式、消息数、最后一条用户提问、耗时、finish_reason、工具调用、token 数；若后端内容审核拦截会标 `⚠️内容审核拦截`。**每次请求都用唯一 ID 串起来，并完整落盘**：发往后端的完整请求体（REQUEST BODY）、后端返回的完整内容（非流式是聚合后的 RESPONSE BODY，流式是后端原始的 RESPONSE RAW SSE）。排查"内容审核拦截""返回异常"等问题时，直接看日志里对应 ID 的完整报文即可。示例：
@@ -211,7 +215,7 @@ python3 converter.py                              # 不记日志
 - **找不到登录文件**：在桌面端完成登录（不是只装、要登进去）。路径见上方「前置条件」。**国际版（workbuddy.ai）账号例外**：桌面端令牌与后端不匹配，登录后仍会 401，请改用「API 密钥模式」（`--direct-key`，见下文）。
 - **客户端报 401**：转换器若用了 `--api-key`，客户端那边要带同样的 key；若是后端 401，可能是 token 失效（转换器会自动刷新，若仍失败需在桌面端重新登录）。
 - **响应慢**：可换 `deepseek-v4-flash` 等更快的模型。
-- **"敏感内容"被拦截**：这是 CodeBuddy 后端的**内容审核**（腾讯合规策略），在模型推理之前就拦了。常见触发原因是客户端注入的 system prompt 里含安全相关英文术语（如 DoS / exploit / credential / C2 等——这些往往是客户端**合规声明模板**里的"拒绝作恶"措辞，属误伤）。两种应对：①用 `--log xxx.log` 在日志里看 `⚠️内容审核拦截` 标记定位是哪条请求；②加 `--desensitize` 启用脱敏模块（`desensitize.py`），它对 system 消息里的这类合规词插入零宽空格（人/模型读无差别，但后端关键词匹配失效），可显著降低被误拦概率。注意：脱敏只针对客户端固定模板，不能也不应绕过对用户真实有害输入的审核。
+- **"敏感内容"被拦截**：这是 CodeBuddy 后端的**内容审核**（腾讯合规策略），在模型推理之前就拦了。常见触发原因是客户端注入的 system prompt 里含安全相关英文术语（如 DoS / exploit / credential / C2 等——这些往往是客户端**合规声明模板**里的"拒绝作恶"措辞，属误伤）。两种应对：①用 `--log xxx.log` 在日志里看 `⚠️内容审核拦截` 标记定位是哪条请求；②加 `--mask` 启用脱敏模块（`src/workbuddy2openai/masking.py`），它对 system 消息里的这类合规词插入零宽空格（人/模型读无差别，但后端关键词匹配失效），可显著降低被误拦概率。注意：脱敏只针对客户端固定模板，不能也不应绕过对用户真实有害输入的审核。
 
 ### ⚠️ 免责声明
 

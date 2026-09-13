@@ -71,7 +71,7 @@ pid_on_port() {
   fi
 }
 
-# Kill only the converter.py process holding the port, never a blanket python
+# Kill only the converter process holding the port, never a blanket python
 # kill. Without this the restart fails with Errno 10048 (address already in
 # use) because the previous process still owns the socket.
 kill_port_holder() {
@@ -79,7 +79,7 @@ kill_port_holder() {
   pid=$(pid_on_port)
   [ -z "$pid" ] && return 0
   cmd=$(process_command_line "$pid")
-  if echo "$cmd" | grep -q "converter.py"; then
+  if echo "$cmd" | grep -q "workbuddy2openai"; then
     kill "$pid" 2>/dev/null || true
     sleep 2
     if kill -0 "$pid" 2>/dev/null; then

@@ -1,34 +1,32 @@
-"""Shared fixtures. Import converter.py once per session and isolate CONFIG between tests."""
+"""Shared fixtures. Import the package once per session and isolate CONFIG between tests."""
 
-import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+SRC_ROOT = REPO_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 
 @pytest.fixture(scope="session")
 def converter_module():
-    """Import converter.py by path, once per session, without running main()."""
-    spec = importlib.util.spec_from_file_location(
-        "converter_under_test", REPO_ROOT / "converter.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["converter_under_test"] = module
-    spec.loader.exec_module(module)
-    return module
+    """The converter facade, imported once per session without running main()."""
+    import workbuddy2openai.converter as converter
+    return converter
 
 
 @pytest.fixture(scope="session")
 def credentials_module(converter_module):
-    """The credentials module converter.py now delegates auth discovery to.
+    """The credentials module the converter delegates auth discovery to.
 
     Tests that patch auth_dirs must patch it here: production reads
-    credentials.auth_dirs, so a patch on the converter facade is invisible.
+    workbuddy2openai.credentials.auth_dirs, so a patch on the converter
+    facade is invisible.
     """
-    import credentials
+    import workbuddy2openai.credentials as credentials
     return credentials
 
 

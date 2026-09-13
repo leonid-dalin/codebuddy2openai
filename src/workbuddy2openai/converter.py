@@ -16,9 +16,9 @@ Cross-platform: locates the auth directory on macOS / Windows / Linux.
 Dependencies: fastapi + uvicorn + httpx (pip install fastapi "uvicorn[standard]" httpx).
 
 Usage:
-  python3 converter.py
-  python3 converter.py --port 9000
-  python3 converter.py --api-key mysecret
+  python3 -m workbuddy2openai.converter
+  python3 -m workbuddy2openai.converter --port 9000
+  python3 -m workbuddy2openai.converter --api-key mysecret
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ import sys
 import httpx
 import uvicorn
 
-from app import (
+from workbuddy2openai.app import (
     CONFIG,
     _check_auth,
     _cred,
@@ -42,12 +42,12 @@ from app import (
     preflight,
     route_for_request,
 )
-from credentials import (
+from workbuddy2openai.credentials import (
     CredentialManager,
     auth_dirs,
     find_auth_file,
 )
-from upstream import (
+from workbuddy2openai.upstream import (
     BACKEND,
     BACKEND_BY_DOMAIN,
     CN_MODELS,

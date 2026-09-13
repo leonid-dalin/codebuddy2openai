@@ -3,7 +3,7 @@
 #
 # Loads .env from the repository root, picks the project virtual environment,
 # and installs the runtime dependencies when they are missing. Any arguments
-# are passed through to converter.py.
+# are passed through to the converter.
 #
 #   ./scripts/start.sh
 #   ./scripts/start.sh --port 9000 --log converter.log
@@ -40,4 +40,4 @@ fi
 
 "$PY" -c 'import httpx, fastapi, uvicorn' 2>/dev/null || "$PY" -m pip install -q -r requirements.txt
 
-exec "$PY" converter.py "$@"
+exec "$PY" -m workbuddy2openai.converter "$@"
