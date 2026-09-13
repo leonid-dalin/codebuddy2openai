@@ -16,18 +16,15 @@ from pathlib import Path
 
 import httpx
 
-BACKEND = "https://copilot.tencent.com"
-DEFAULT_DOMAIN = "www.codebuddy.cn"
-USER_AGENT = "workbuddy2openai/2.0"
+from workbuddy2openai import protocol
 
-BACKEND_BY_DOMAIN = {
-    "www.workbuddy.ai": "https://www.workbuddy.ai",
-    "www.codebuddy.cn": "https://copilot.tencent.com",
-}
+BACKEND = protocol.BACKEND_CN
+DEFAULT_DOMAIN = protocol.BACKEND_DEFAULT_DOMAIN
+USER_AGENT = "workbuddy2openai/2.0"
 
 
 def backend_for_domain(domain: str | None) -> str:
-    return BACKEND_BY_DOMAIN.get(domain or "", "https://copilot.tencent.com")
+    return protocol.BACKEND_BY_DOMAIN.get(domain or "", protocol.BACKEND_CN)
 
 
 def auth_dirs() -> list[Path]:
@@ -81,15 +78,15 @@ class CredentialManager:
     def _is_expired(self) -> bool:
         s = self._session()
         expires_at = (s.get("auth") or {}).get("expiresAt") or 0
-        return time.time() * 1000 >= (expires_at - 60_000)
+        return time.time() * 1000 >= (expires_at - protocol.EXPIRY_MARGIN_MS)
 
     def _refresh(self):
         s = self._session()
         auth = s.get("auth") or {}
         headers = self._build_headers_from(auth, s.get("account") or {})
-        headers["X-Refresh-Token"] = auth.get("refreshToken", "")
-        headers["X-Auth-Refresh-Source"] = "plugin"
-        url = f"{backend_for_domain(auth.get('domain'))}/v2/plugin/auth/token/refresh"
+        headers[protocol.HEADER_REFRESH_TOKEN] = auth.get("refreshToken", "")
+        headers[protocol.HEADER_REFRESH_SOURCE] = protocol.REFRESH_SOURCE_VALUE
+        url = f"{backend_for_domain(auth.get('domain'))}{protocol.TOKEN_REFRESH_PATH}"
         try:
             with httpx.Client(timeout=15) as c:
                 r = c.post(url, headers=headers, json={})
@@ -114,18 +111,21 @@ class CredentialManager:
         self._mtime = self.path.stat().st_mtime
 
     def _build_headers_from(self, auth: dict, account: dict) -> dict:
-        domain = auth.get("domain") or DEFAULT_DOMAIN
-        h = {
+        domain = auth.get("domain") or protocol.BACKEND_DEFAULT_DOMAIN
+        return {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "Authorization": f"Bearer {auth.get('accessToken','')}",
-            "X-User-Id": account.get("uid", ""),
-            "X-Enterprise-Id": account.get("enterpriseId", ""),
-            "X-Tenant-Id": account.get("enterpriseId", ""),
-            "X-Domain": domain,
+            protocol.HEADER_ACCESS_TOKEN: f"Bearer {auth.get('accessToken','')}",
+            protocol.HEADER_USER_ID: account.get("uid", ""),
+            protocol.HEADER_ENTERPRISE_ID: account.get("enterpriseId", ""),
+            protocol.HEADER_TENANT_ID: account.get("enterpriseId", ""),
+            protocol.HEADER_DOMAIN: domain,
             "User-Agent": USER_AGENT,
         }
-        return h
+
+    def backend_url(self) -> str:
+        """The realm backend this credential refreshes and calls against."""
+        return backend_for_domain((self._session().get("auth") or {}).get("domain"))
 
     def get_headers(self) -> dict:
         with self._lock:
