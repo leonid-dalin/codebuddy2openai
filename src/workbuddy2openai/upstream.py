@@ -16,13 +16,6 @@ import time
 import httpx
 from fastapi import HTTPException
 
-from workbuddy2openai.credentials import (
-    BACKEND,
-    BACKEND_BY_DOMAIN,
-    USER_AGENT,
-    backend_for_domain,
-)
-
 DIRECT_KEY_BACKEND = "https://www.codebuddy.ai"
 
 CN_MODELS = [

@@ -19,19 +19,11 @@ def split_modules():
 
 
 def test_converter_reexports_split_symbols(split_modules):
+    """converter keeps only the entry-point surface: main, the FastAPI app,
+    the runtime CONFIG dict and the startup preflight."""
     conv = split_modules["conv"]
-    creds = split_modules["creds"]
-    upstream = split_modules["upstream"]
     app = split_modules["app"]
-    for attr in ("CredentialManager", "auth_dirs", "find_auth_file"):
-        assert getattr(conv, attr) is getattr(creds, attr)
-    for attr in ("backend_for_domain", "TOKEN_PATH_RETRY_CODES",
-                 "CN_MODELS", "INTL_MODELS", "PASSTHROUGH_BODY_KEYS",
-                 "USER_AGENT", "BACKEND", "DIRECT_KEY_BACKEND"):
-        assert getattr(conv, attr) is getattr(upstream, attr)
-    for attr in ("app", "CONFIG", "preflight", "_check_auth", "_cred",
-                 "chat_completions", "list_models", "health",
-                 "route_for_request", "complete_with_fallback"):
+    for attr in ("app", "CONFIG", "preflight", "_log", "_env_first"):
         assert getattr(conv, attr) is getattr(app, attr)
 
 
@@ -59,8 +51,27 @@ def test_runtime_config_is_one_dict(split_modules):
     del app.CONFIG["probe_key"]
 
 
-def test_masking_fallback_present(split_modules):
-    assert callable(split_modules["app"].mask_body)
+def test_mask_body_output():
+    import workbuddy2openai.app as app_module
+    masked = app_module.mask_body(
+        {"messages": [{"role": "system", "content": "Refuse DoS attacks."}]})
+    assert masked["messages"][0]["content"] == "Refuse D\u200boS attacks."
+    plain = app_module.mask_body(
+        {"messages": [{"role": "user", "content": "Refuse DoS attacks."}]})
+    assert plain["messages"][0]["content"] == "Refuse DoS attacks."
+
+
+def test_app_imports_when_masking_blocked(monkeypatch):
+    """app.py must import masking through the package, so blocking
+    workbuddy2openai.masking fails the import instead of silently
+    installing an identity mask_body."""
+    import sys
+    import importlib
+    monkeypatch.delitem(sys.modules, "workbuddy2openai.app", raising=False)
+    monkeypatch.setitem(sys.modules, "workbuddy2openai.masking", None)
+    with pytest.raises(ImportError):
+        importlib.reload(importlib.import_module("workbuddy2openai.app"))
+    monkeypatch.delitem(sys.modules, "workbuddy2openai.app", raising=False)
 
 
 def test_models_owned_by_value_stable(client):
@@ -74,5 +85,25 @@ def test_env_var_precedence_order(monkeypatch, split_modules):
     assert split_modules["app"]._env_first("WORKBUDDY2OPENAI_KEY", "CODEBUDDY2OPENAI_KEY") == "old-name"
 
 
-def test_user_agent_renamed(split_modules):
-    assert split_modules["upstream"].USER_AGENT == "workbuddy2openai/2.0"
+def test_user_agent_renamed():
+    import workbuddy2openai.credentials as creds
+    assert creds.USER_AGENT == "workbuddy2openai/2.0"
+
+
+def test_main_runs_with_log(tmp_path, monkeypatch):
+    """main() must reach uvicorn.run with --log set: the startup log write
+    happens through the imported _log, so a stale import here only ever
+    failed at real startup."""
+    import workbuddy2openai.converter as conv
+
+    calls: list = []
+    log_file = tmp_path / "proxy.log"
+    monkeypatch.setattr(conv, "preflight", lambda: True)
+    monkeypatch.setattr(conv.sys, "argv",
+                        ["converter", "--log", str(log_file), "--skip-check"])
+    monkeypatch.setattr(conv.uvicorn, "run",
+                        lambda *a, **k: calls.append((a, k)))
+    conv.main()
+    assert calls, "uvicorn.run never reached"
+    assert log_file.exists()
+    assert "==== converter started ====" in log_file.read_text(encoding="utf-8")

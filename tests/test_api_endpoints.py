@@ -391,7 +391,7 @@ class TestCollectStreamAggregation:
             "usage": None,
         }
         upstream_ok([f"data: {json.dumps(payload)}\n\n".encode(),
-                     f"data: [DONE]\n\n".encode()])
+                     b"data: [DONE]\n\n"])
         response = direct_key_client.post("/v1/chat/completions", json={
             "model": "glm-5.2",
             "messages": [{"role": "user", "content": "tools?"}],

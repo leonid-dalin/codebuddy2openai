@@ -18,8 +18,6 @@ import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-import uvicorn
-
 from workbuddy2openai.credentials import (
     BACKEND,
     USER_AGENT,
@@ -29,26 +27,17 @@ from workbuddy2openai.credentials import (
     find_auth_file,
 )
 from workbuddy2openai.upstream import (
-    CN_MODELS,
     DEFAULT_MODELS,
     DIRECT_KEY_BACKEND,
     INTL_MODELS,
     PASSTHROUGH_BODY_KEYS,
-    TOKEN_PATH_RETRY_CODES,
     _UpstreamGateError,
-    _collect_stream,
-    _err_code,
     _post_collect,
-    _safe_err_raw,
     _stream_upstream,
     _truncate,
 )
 
-try:
-    from workbuddy2openai.masking import mask_body
-except ImportError:
-    def mask_body(body, roles=("system",)):
-        return body
+from workbuddy2openai.masking import mask_body
 
 app = FastAPI(title="workbuddy2openai", version="2.0")
 CONFIG: dict = {"api_key": "", "cred": None, "log_path": None,
@@ -198,9 +187,8 @@ async def chat_completions(request: Request,
                            authorization: str = Header(default=None),
                            x_api_key: Optional[str] = Header(default=None, alias="X-Api-Key")):
     _check_auth(authorization, x_api_key)
-    cred = None
     if not CONFIG.get("direct_key"):
-        cred = _cred()
+        _cred()
 
     try:
         payload = await request.json()
