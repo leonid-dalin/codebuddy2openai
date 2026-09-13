@@ -21,6 +21,17 @@ def converter_module():
     return module
 
 
+@pytest.fixture(scope="session")
+def credentials_module(converter_module):
+    """The credentials module converter.py now delegates auth discovery to.
+
+    Tests that patch auth_dirs must patch it here: production reads
+    credentials.auth_dirs, so a patch on the converter facade is invisible.
+    """
+    import credentials
+    return credentials
+
+
 @pytest.fixture()
 def fresh_config(converter_module):
     """Reset CONFIG to defaults so tests cannot leak state into each other."""

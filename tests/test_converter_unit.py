@@ -67,17 +67,17 @@ class TestModelCatalogs:
 
 
 class TestFindAuthFile:
-    def test_finds_info_file_in_windows_layout(self, converter_module, tmp_path, monkeypatch):
+    def test_finds_info_file_in_windows_layout(self, credentials_module, tmp_path, monkeypatch):
         auth_dir = tmp_path / "CodeBuddyExtension" / "Data" / "Public" / "auth"
         auth_dir.mkdir(parents=True)
         (auth_dir / "workbuddy-desktop-ai.info").write_text("{}", encoding="utf-8")
-        monkeypatch.setattr(converter_module, "auth_dirs", lambda: [auth_dir])
-        found = converter_module.find_auth_file()
+        monkeypatch.setattr(credentials_module, "auth_dirs", lambda: [auth_dir])
+        found = credentials_module.find_auth_file()
         assert found is not None and found.name == "workbuddy-desktop-ai.info"
 
-    def test_returns_none_when_directory_missing(self, converter_module, tmp_path, monkeypatch):
-        monkeypatch.setattr(converter_module, "auth_dirs", lambda: [tmp_path / "missing"])
-        assert converter_module.find_auth_file() is None
+    def test_returns_none_when_directory_missing(self, credentials_module, tmp_path, monkeypatch):
+        monkeypatch.setattr(credentials_module, "auth_dirs", lambda: [tmp_path / "missing"])
+        assert credentials_module.find_auth_file() is None
 
 
 class TestCredentialManager:
